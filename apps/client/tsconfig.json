@@ -1,5 +1,4 @@
 {
-  "extends": "../../tsconfig.json", 
   "compilerOptions": {
     "target": "ESNext",
     "useDefineForClassFields": true,
@@ -16,8 +15,8 @@
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
-    "types": ["vitest/globals"]
+    "types": ["vitest/globals", "node"]
   },
   "include": ["src"],
-  "references": [{ "path": "./tsconfig.node.json" }]
+  "exclude": ["node_modules", "e2e"]
 }

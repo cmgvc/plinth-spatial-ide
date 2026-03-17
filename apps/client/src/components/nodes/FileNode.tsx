@@ -25,7 +25,11 @@ export default function FileNode({ data }: any) {
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#1e1e1e] border border-[#333] rounded-md shadow-2xl overflow-hidden ring-1 ring-white/10">
+    <div
+      className={`flex flex-col h-full bg-[#1e1e1e] border border-[#333] rounded-md shadow-2xl overflow-hidden ring-1 ring-white/10 ${
+        isEditing ? "nodrag" : ""
+      }`}
+    >
       {/* Header */}
       <div className="flex items-center justify-between bg-[#252526] px-3 py-2 border-b border-[#333] drag-handle">
         <div className="flex items-center gap-3">
@@ -76,7 +80,7 @@ export default function FileNode({ data }: any) {
           className={`flex-1 relative ${
             isScrollLocked
               ? "overflow-hidden hide-scrollbar"
-              : "overflow-auto custom-scrollbar"
+              : "overflow-auto custom-scrollbar nodrag nopan nowheel"
           }`}
           style={{ height: "100%" }}
         >

@@ -15,10 +15,13 @@
     "axios": "^1.13.6",
     "lucide-react": "^0.577.0",
     "monaco-editor": "^0.55.1",
-    "react-flow-renderer": "^10.3.17"
+    "react-flow-renderer": "^10.3.17",
+    "reactflow": "^11.11.4"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
     "vitest": "^3.2.4"
   }
 }

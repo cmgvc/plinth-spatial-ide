@@ -60,6 +60,10 @@ const fileSlice = createSlice({
         node.data = { ...node.data, code: action.payload.code };
       }
     },
+    clearAllNodes: (state) => {
+      state.nodes = [];
+      state.edges = [];
+    },
   },
 });
 
@@ -69,6 +73,7 @@ export const {
   edgesChanged,
   onConnect,
   updateNodeCode,
+  clearAllNodes,
 } = fileSlice.actions;
 
 export default fileSlice.reducer;

@@ -5,8 +5,6 @@ export const store = configureStore({
   reducer: {
     files: fileReducer,
   },
-  // This middleware fix is required for React Flow because 
-  // it sometimes uses non-serializable data in nodes
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
       serializableCheck: false,

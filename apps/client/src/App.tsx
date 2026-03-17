@@ -5,28 +5,31 @@ import { RootState } from "./stores";
 import { setNodesInitial, nodesChanged } from "./stores/fileSlice";
 import Sidebar from "./components/Sidebar";
 import Canvas from "./components/Canvas";
+import { clearAllNodes } from "./stores/fileSlice";
 
 export default function App() {
   const { setCenter } = useReactFlow();
   const dispatch = useDispatch();
-  
+
   const nodes = useSelector((state: RootState) => state.files.nodes);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("test") === "true") {
-      dispatch(setNodesInitial([
-        {
-          id: "test-file.ts",
-          type: "fileNode",
-          position: { x: 100, y: 100 },
-          data: {
-            filename: "test-file.ts",
-            code: 'console.log("Hello from Playwright!");',
+      dispatch(
+        setNodesInitial([
+          {
+            id: "test-file.ts",
+            type: "fileNode",
+            position: { x: 100, y: 100 },
+            data: {
+              filename: "test-file.ts",
+              code: 'console.log("Hello from Playwright!");',
+            },
+            style: { width: 450, height: 200 },
           },
-          style: { width: 450, height: 200 },
-        },
-      ]));
+        ]),
+      );
     }
   }, [dispatch]);
 
@@ -65,7 +68,7 @@ export default function App() {
         setCenter(
           newNode.position.x + 500,
           newNode.position.y + newNodeHeight / 2,
-          { zoom: 1, duration: 800 }
+          { zoom: 1, duration: 800 },
         );
       }, 100);
     },
@@ -83,7 +86,11 @@ export default function App() {
         overflow: "hidden",
       }}
     >
-      <Sidebar onFileSelect={handleFileSelect} />
+      <Sidebar
+        onFileSelect={handleFileSelect}
+        onClear={() => dispatch(clearAllNodes())}
+        hasNodes={nodes.length > 0}
+      />
 
       <main style={{ flex: 1, position: "relative", height: "100%" }}>
         <Canvas />

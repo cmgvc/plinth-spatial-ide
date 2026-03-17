@@ -1,10 +1,12 @@
 import { useState } from "react";
+import { ClearWorkspaceModal } from "./ClearWorkspaceModal";
 
 declare global {
   interface Window {
     showDirectoryPicker: (options?: any) => Promise<FileSystemDirectoryHandle>;
   }
 }
+
 const ExplorerItem = ({
   handle,
   depth,
@@ -52,11 +54,9 @@ const ExplorerItem = ({
         >
           {isDirectory ? "▶" : ""}
         </span>
-
         <span className="mr-2 text-[14px]">
           {isDirectory ? (isOpen ? "📂" : "📁") : "📄"}
         </span>
-
         <span
           className={`truncate text-[13px] tracking-tight ${isDirectory ? "font-medium text-[#ccc]" : "font-light text-[#aaa]"} group-hover:text-white`}
         >
@@ -82,22 +82,52 @@ const ExplorerItem = ({
 
 export default function Sidebar({
   onFileSelect,
+  onClear,
+  hasNodes,
 }: {
   onFileSelect: (h: FileSystemFileHandle) => void;
+  onClear: () => void;
+  hasNodes: boolean;
 }) {
-  const [root, setRoot] = useState<FileSystemDirectoryHandle | null>(null);
+  const [roots, setRoots] = useState<FileSystemDirectoryHandle[]>([]);
+  const [showModal, setShowModal] = useState(false);
 
-  const selectFolder = async () => {
+  const triggerPicker = async (shouldClear: boolean) => {
     try {
       const handle = await window.showDirectoryPicker();
-      setRoot(handle);
+
+      if (shouldClear) {
+        onClear();
+        setRoots([handle]);
+      } else {
+        setRoots((prev) =>
+          prev.find((r) => r.name === handle.name) ? prev : [...prev, handle],
+        );
+      }
+      setShowModal(false);
     } catch (e) {
-      console.error("Picker cancelled");
+      console.log("Picker cancelled");
+      setShowModal(false);
+    }
+  };
+
+  const handleOpenFolderClick = () => {
+    if (roots.length > 0 || hasNodes) {
+      setShowModal(true);
+    } else {
+      triggerPicker(true);
     }
   };
 
   return (
     <div className="w-72 bg-[#0a0a0a] border-r border-[#222] h-screen flex flex-col text-[#ccc] select-none overflow-hidden">
+      {showModal && (
+        <ClearWorkspaceModal
+          onConfirm={() => triggerPicker(true)}
+          onCancel={() => triggerPicker(false)}
+        />
+      )}
+
       <div className="p-5 border-b border-[#1a1a1a]">
         <div className="flex items-center justify-between mb-4">
           <span className="text-[10px] font-bold tracking-[0.2em] text-gray-600 uppercase">
@@ -111,15 +141,15 @@ export default function Sidebar({
         </div>
 
         <button
-          onClick={selectFolder}
+          onClick={handleOpenFolderClick}
           className="w-full bg-[#1a1a1a] hover:bg-[#222] border border-[#333] text-[#eee] text-[12px] py-2 rounded-md transition-all active:scale-[0.97]"
         >
-          {root ? "Change Folder" : "Open Folder"}
+          {roots.length > 0 ? "Add Folder" : "Open Folder"}
         </button>
       </div>
 
       <div className="flex-1 overflow-y-auto py-2 scrollbar-hide">
-        {!root ? (
+        {roots.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center opacity-20 grayscale">
             <span className="text-4xl mb-2">🔭</span>
             <p className="text-[10px] uppercase tracking-widest font-bold">
@@ -127,7 +157,18 @@ export default function Sidebar({
             </p>
           </div>
         ) : (
-          <ExplorerItem handle={root} depth={0} onFileSelect={onFileSelect} />
+          roots.map((rootHandle) => (
+            <div key={rootHandle.name} className="mb-4">
+              <div className="px-4 py-1 text-[9px] font-bold text-blue-500/50 uppercase tracking-widest border-b border-white/5 mb-1">
+                Project: {rootHandle.name}
+              </div>
+              <ExplorerItem
+                handle={rootHandle}
+                depth={0}
+                onFileSelect={onFileSelect}
+              />
+            </div>
+          ))
         )}
       </div>
     </div>

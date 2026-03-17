@@ -1,23 +1,32 @@
-import ReactFlow, { Background, Controls, Node } from 'reactflow';
-import 'reactflow/dist/style.css';
+import ReactFlow, {
+  Background,
+  BackgroundVariant,
+  Node,
+  OnNodesChange,
+} from "reactflow";
+import FileNode from "./nodes/FileNode";
+import "reactflow/dist/style.css";
 
-const initialNodes: Node[] = [
-  {
-    id: '1',
-    position: { x: 100, y: 100 },
-    data: { label: 'Code block' },
-    type: 'input',
-  },
-];
+const nodeTypes = {
+  fileNode: FileNode,
+};
 
-export default function Canvas() {
+export default function Canvas({
+  nodes,
+  onNodesChange,
+}: {
+  nodes: Node[];
+  onNodesChange: OnNodesChange;
+}) {
   return (
-    <div style={{ width: '100vw', height: '100vh', position: 'absolute', top: 0, left: 0 }}>
-      <ReactFlow 
-        nodes={initialNodes} 
-        style={{ width: '100%', height: '100%' }}
+    <div style={{ width: "100%", height: "100%" }}>
+      <ReactFlow
+        nodes={nodes}
+        onNodesChange={onNodesChange}
+        nodeTypes={nodeTypes}
+        fitView
       >
-        <Background />
+        <Background color="#222" variant={BackgroundVariant.Dots} gap={20} />
       </ReactFlow>
     </div>
   );

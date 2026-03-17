@@ -10,15 +10,15 @@ export default function App() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('test') === 'true') {
+    if (params.get("test") === "true") {
       setNodes([
         {
-          id: 'test-file.ts',
-          type: 'fileNode',
+          id: "test-file.ts",
+          type: "fileNode",
           position: { x: 100, y: 100 },
-          data: { 
-            filename: 'test-file.ts', 
-            code: 'console.log("Hello from Playwright!");' 
+          data: {
+            filename: "test-file.ts",
+            code: 'console.log("Hello from Playwright!");',
           },
           style: { width: 450, height: 200 },
         },
@@ -35,7 +35,8 @@ export default function App() {
       setNodes((nds) => {
         if (nds.find((n) => n.id === handle.name)) return nds;
 
-        const newNodeHeight = Math.min(lineCount * 24 + 60, 600);
+        const calculatedHeight = lineCount * 24 + 80;
+        const newNodeHeight = Math.min(calculatedHeight, 600);
 
         const lowestPoint = nds.reduce((max, node) => {
           const nodeBottom =
@@ -47,7 +48,7 @@ export default function App() {
           id: handle.name,
           type: "fileNode",
           position: { x: 100, y: lowestPoint + 20 },
-          style: { width: 450, height: newNodeHeight },
+          style: { width: 1000, height: newNodeHeight },
           data: {
             filename: handle.name,
             code: content,

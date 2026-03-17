@@ -4,17 +4,83 @@
 
 @layer base {
   body {
-    @apply bg-editor-bg text-editor-text-primary antialiased overflow-hidden;
-    font-family:
-      -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
-      sans-serif;
+    @apply bg-[#121212] text-[#d4d4d4] antialiased overflow-hidden;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   }
 
-  .custom-scrollbar::-webkit-scrollbar {
-    width: 4px;
+  textarea {
+    tab-size: 2;
+    -moz-tab-size: 2;
+    font-size: 13px; 
   }
-  .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: #333;
-    border-radius: 10px;
+
+  pre, code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   }
+}
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none !important;
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none !important; 
+    scrollbar-width: none !important;
+  }
+
+  .transition-all {
+    transition-property: all;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 150ms;
+  }
+}
+
+.react-flow__handle {
+  width: 8px !important;
+  height: 8px !important;
+  background: #3b82f6 !important;
+  border: none !important;
+}
+
+.react-flow__node.selected {
+  outline: 2px solid #3b82f6;
+  border-radius: 0.375rem;
+}
+
+.drag-handle {
+  cursor: grab;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+textarea.whitespace-pre {
+  line-height: 1.5rem;
+  padding-top: 1rem;
+  padding-bottom: 1rem;
+} 
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #1a1a1a;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #444;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none !important;
+}
+.hide-scrollbar {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
 }

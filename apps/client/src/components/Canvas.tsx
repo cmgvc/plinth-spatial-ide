@@ -12,10 +12,12 @@ const initialNodes: Node[] = [
 
 export default function Canvas() {
   return (
-    <div style={{ width: '100vw', height: '100vh', backgroundColor: '#0f172a' }}>
-      <ReactFlow nodes={initialNodes}>
-        <Background color="#334155" gap={20} />
-        <Controls />
+    <div style={{ width: '100vw', height: '100vh', position: 'absolute', top: 0, left: 0 }}>
+      <ReactFlow 
+        nodes={initialNodes} 
+        style={{ width: '100%', height: '100%' }}
+      >
+        <Background />
       </ReactFlow>
     </div>
   );

@@ -4,8 +4,8 @@ import 'reactflow/dist/style.css';
 const initialNodes: Node[] = [
   {
     id: '1',
-    position: { x: 0, y: 0 },
-    data: { label: 'Hello' },
+    position: { x: 100, y: 100 },
+    data: { label: 'Code block' },
     type: 'input',
   },
 ];

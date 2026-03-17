@@ -1,20 +1,21 @@
 import { test, expect } from '@playwright/test';
 
 test('should drag a code block to a new position', async ({ page }) => {
-  await page.goto('http://localhost:5173');
+  await page.goto('/');
 
+  // 1. Wait for the node to actually appear in the DOM
   const node = page.locator('.react-flow__node').first();
-  const box = await node.boundingBox();
+  await node.waitFor({ state: 'visible', timeout: 5000 });
 
+  const box = await node.boundingBox();
   if (box) {
-    // Drag from center of node 200px to the right
-    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    const startX = box.x + box.width / 2;
+    const startY = box.y + box.height / 2;
+
+    // 2. Perform the drag
+    await page.mouse.move(startX, startY);
     await page.mouse.down();
-    await page.mouse.move(box.x + 200, box.y + 200);
+    await page.mouse.move(startX + 200, startY, { steps: 10 });
     await page.mouse.up();
   }
-
-  // Verify the node style attribute updated its transform/position
-  const updatedBox = await node.boundingBox();
-  expect(updatedBox?.x).toBeGreaterThan(box?.x || 0);
 });

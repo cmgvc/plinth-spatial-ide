@@ -94,6 +94,26 @@ export default function App() {
 
       <main style={{ flex: 1, position: "relative", height: "100%" }}>
         <Canvas />
+        <button
+          onClick={() => {
+            if (
+              window.confirm(
+                "Are you sure you want to clear the entire workspace?",
+              )
+            ) {
+              dispatch(clearAllNodes());
+            }
+          }}
+          className="fixed bottom-6 right-6 z-50 p-3 bg-[#1e1e1e] hover:bg-red-500 border border-[#333] hover:border-red-500/50 text-gray-400 hover:text-white rounded-full shadow-2xl transition-all group"
+          title="Clear Workspace"
+        >
+          <div className="flex items-center gap-2 px-1">
+            <span className="text-[11px] font-bold uppercase tracking-wider hidden group-hover:inline">
+              Clear Canvas
+            </span>
+            <span className="text-lg">🗑️</span>
+          </div>
+        </button>
       </main>
     </div>
   );

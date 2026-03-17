@@ -7,7 +7,7 @@
     "dev:server": "npm run dev --workspace=apps/server",
     "dev": "concurrently -n \"CLIENT,SERVER\" -c \"cyan,magenta\" \"npm run dev:client\" \"npm run dev:server\"",
     "test": "npm run test -w apps/client",
-    "test:e2e": "playwright test --config=apps/client/playwright.config.ts",
+    "test:e2e": "playwright test -c apps/client/playwright.config.ts",
     "test:ui": "playwright test -c apps/client/playwright.config.ts --ui",
     "build": "npm run build --workspaces --if-present"
   },

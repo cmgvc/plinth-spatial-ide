@@ -1,22 +1,30 @@
 import React, { useState, useRef, useEffect } from "react";
+import { useDispatch } from "react-redux";
+import { updateNodeCode } from "../../stores/fileSlice";
 import { Handle, Position } from "reactflow";
+import { useAutoSave } from "../../hooks/useAutoSave";
+import { useFileTheme } from "../../hooks/useFileTheme";
+import { useKeyboardShortcuts } from "../../hooks/useKeyboardShortcuts";
 
-export default function FileNode({ data }: any) {
-  const [isEditing, setIsEditing] = useState(false);
-  const [isScrollLocked, setIsScrollLocked] = useState(true); // Default scroll as locked
-  const [code, setCode] = useState(data.code);
+interface FileNodeProps {
+  id: string;
+  data: {
+    filename: string;
+    code: string;
+  };
+}
 
+export default function FileNode({ id, data }: FileNodeProps) {
+  const dispatch = useDispatch();
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const gutterRef = useRef<HTMLDivElement>(null);
-  const lines = code.split("\n");
+  const [isEditing, setIsEditing] = useState(false);
+  const [isScrollLocked, setIsScrollLocked] = useState(true);
+  const [localCode, setLocalCode] = useState(data.code);
+  const theme = useFileTheme(data.filename);
 
-  // Auto-save logic
-  useEffect(() => {
-    if (code === data.code) return;
-    const timeout = setTimeout(() => {
-      data.code = code;
-    }, 500);
-    return () => clearTimeout(timeout);
-  }, [code, data]);
+  useAutoSave(id, localCode);
+  const lines = localCode.split("\n");
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
     if (gutterRef.current) {
@@ -24,39 +32,51 @@ export default function FileNode({ data }: any) {
     }
   };
 
+  useKeyboardShortcuts(
+    "s",
+    () => {
+      if (isEditing) {
+        dispatch(updateNodeCode({ id, code: localCode }));
+        setIsEditing(false);
+        console.log("File saved and editor closed via Cmd+S");
+      }
+    },
+    true,
+  );
+
+  useKeyboardShortcuts(
+    "Escape",
+    () => {
+      if (isEditing) {
+        setIsEditing(false);
+        setLocalCode(data.code);
+      }
+    },
+    false,
+  );
+
   return (
     <div
-      className={`flex flex-col h-full bg-[#1e1e1e] border border-[#333] rounded-md shadow-2xl overflow-hidden ring-1 ring-white/10 ${
-        isEditing ? "nodrag" : ""
-      }`}
+      className={`flex flex-col h-full bg-[#1e1e1e] border border-[#333] rounded-md shadow-2xl overflow-hidden ring-1 ring-white/10 ${isEditing ? "nodrag" : ""}`}
     >
       {/* Header */}
-      <div className="flex items-center justify-between bg-[#252526] px-3 py-2 border-b border-[#333] drag-handle">
+      <div
+        className="flex items-center justify-between bg-[#252526] px-3 py-2 border-b border-[#333] drag-handle"
+        style={{ borderTop: `2px solid ${theme.color}` }}
+      >
         <div className="flex items-center gap-3">
-          <span className="text-[11px] text-gray-400 font-mono truncate max-w-[100px]">
+          <span className="text-[11px] text-gray-400 font-mono truncate max-w-[150px]">
             {data.filename}
           </span>
-
-          {/* Toggle for editor */}
           <button
             onClick={() => setIsEditing(!isEditing)}
-            className={`text-[9px] px-2 py-0.5 rounded border transition-all ${
-              isEditing
-                ? "bg-blue-500/20 border-blue-500 text-blue-300"
-                : "border-[#444] text-gray-400"
-            }`}
+            className={`text-[9px] px-2 py-0.5 rounded border transition-standard ${isEditing ? "bg-blue-500/20 border-blue-500 text-blue-300" : "border-[#444] text-gray-400"}`}
           >
             {isEditing ? "EDITOR: ON" : "EDITOR: OFF"}
           </button>
-
-          {/* Toggle for scroll bar */}
           <button
             onClick={() => setIsScrollLocked(!isScrollLocked)}
-            className={`text-[9px] px-2 py-0.5 rounded border transition-all ${
-              isScrollLocked
-                ? "border-red-900 text-red-500"
-                : "bg-green-500/20 border-green-500 text-green-300"
-            }`}
+            className={`text-[9px] px-2 py-0.5 rounded border transition-standard ${isScrollLocked ? "border-red-900/50 text-red-500/70" : "bg-green-500/20 border-green-500 text-green-300"}`}
           >
             {isScrollLocked ? "SCROLL: LOCKED" : "SCROLL: ACTIVE"}
           </button>
@@ -69,34 +89,36 @@ export default function FileNode({ data }: any) {
           ref={gutterRef}
           className="bg-[#1c1c1c] text-[#6e7681] text-right px-3 py-4 select-none border-r border-[#333] min-w-[45px] font-mono text-[12px] leading-6 overflow-hidden"
         >
-          {code.split("\n").map((_: any, i: number) => (
+          {lines.map((_: string, i: number) => (
             <div key={i}>{i + 1}</div>
           ))}
         </div>
 
         {/* Code content area */}
         <div
+          ref={scrollContainerRef}
           onScroll={handleScroll}
-          className={`flex-1 relative ${
-            isScrollLocked
-              ? "overflow-hidden hide-scrollbar"
-              : "overflow-auto custom-scrollbar nodrag nopan nowheel"
-          }`}
-          style={{ height: "100%" }}
+          className={`flex-1 relative ${isScrollLocked ? "overflow-hidden hide-scrollbar" : "overflow-auto custom-scrollbar nodrag nopan nowheel"}`}
         >
-          {isEditing ? (
+          <div className="grid grid-cols-1 grid-rows-1 min-h-full w-full">
             <textarea
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
+              value={localCode}
+              onChange={(e) => setLocalCode(e.target.value)}
               spellCheck={false}
-              rows={lines.length}
-              className="w-full p-4 bg-transparent text-[#d4d4d4] font-mono text-[13px] leading-6 resize-none outline-none border-none whitespace-pre hide-scrollbar block h-auto"
+              className={`col-start-1 row-start-1 w-full p-4 bg-transparent text-[#d4d4d4] font-mono text-[13px] leading-6 resize-none outline-none border-none whitespace-pre overflow-hidden z-10 transition-opacity duration-75 ${
+                isEditing
+                  ? "opacity-100 pointer-events-auto"
+                  : "opacity-0 pointer-events-none"
+              }`}
             />
-          ) : (
-            <pre className="p-4 font-mono text-[13px] leading-6 text-[#d4d4d4] whitespace-pre hide-scrollbar">
-              <code>{code}</code>
+            <pre
+              className={`col-start-1 row-start-1 p-4 font-mono text-[13px] leading-6 text-[#d4d4d4] whitespace-pre transition-opacity duration-75 ${
+                !isEditing ? "opacity-100" : "opacity-0"
+              }`}
+            >
+              <code>{localCode}</code>
             </pre>
-          )}
+          </div>
         </div>
       </div>
 

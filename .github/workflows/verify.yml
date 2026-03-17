@@ -6,21 +6,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: '23'
           cache: 'npm'
 
-      - name: Install Dependencies
+      - name: Install dependencies
         run: npm install
 
       - name: Run Unit Tests (Vitest)
-        run: npm run test
+        run: npm run test -w apps/client
 
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps
 
       - name: Run E2E Tests (Playwright)
-        run: npm run test:ui
+        run: npx playwright test -c apps/client/playwright.config.ts

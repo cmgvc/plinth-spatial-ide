@@ -42,7 +42,7 @@ export default function FileNode({
 
       <div className="flex flex-1 font-mono text-[13px] leading-6 overflow-hidden">
         <div className="bg-[#1e1e1e] text-[#858585] text-right px-3 py-1 select-none border-r border-[#333333] min-w-[40px]">
-          {lines.map((_, i) => (
+          {lines.map((_: any, i: number) => (
             <div key={i} className="h-6 text-[11px]">
               {i + 1}
             </div>

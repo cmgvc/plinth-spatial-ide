@@ -11,3 +11,10 @@ The spatial code canvas - aka your newest (and favourite) IDE!
 ```
 npm run dev
 ```
+
+## Test
+Playwright: 
+```
+cd apps/client
+npx playwright test --ui
+```

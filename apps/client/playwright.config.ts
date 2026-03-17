@@ -5,17 +5,17 @@ export default defineConfig({
   testMatch: "**/*.spec.ts",
   testIgnore: ["**/node_modules/**", "**/src/**", "**/*.test.ts"],
   fullyParallel: true,
-  
+
   use: {
-    baseURL: "http://127.0.0.1:5173/",
+    baseURL: "http://127.0.0.1:5173",
   },
 
   webServer: {
     command: "npm run dev",
-    url: "http://127.0.0.1:5173/",
+    url: "http://127.0.0.1:5173",
     reuseExistingServer: !process.env.CI,
     timeout: 180 * 1000,
-    stdout: 'pipe',
-    stderr: 'pipe',
+    stdout: "pipe",
+    stderr: "pipe",
   },
 });

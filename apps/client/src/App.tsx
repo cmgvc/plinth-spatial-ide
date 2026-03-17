@@ -1,17 +1,20 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useReactFlow } from "reactflow";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "./stores";
-import { setNodesInitial, nodesChanged } from "./stores/fileSlice";
+import { setNodesInitial, nodesChanged, clearAllNodes } from "./stores/fileSlice";
 import Sidebar from "./components/Sidebar";
 import Canvas from "./components/Canvas";
-import { clearAllNodes } from "./stores/fileSlice";
 
 export default function App() {
   const { setCenter } = useReactFlow();
   const dispatch = useDispatch();
-
   const nodes = useSelector((state: RootState) => state.files.nodes);
+
+  const nodesRef = useRef(nodes);
+  useEffect(() => {
+    nodesRef.current = nodes;
+  }, [nodes]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -35,18 +38,32 @@ export default function App() {
 
   const handleFileSelect = useCallback(
     async (handle: FileSystemFileHandle) => {
-      if (nodes.find((n) => n.id === handle.name)) return;
+      const currentNodes = nodesRef.current;
+
+      const existingNode = currentNodes.find((n) => n.id === handle.name);
+      if (existingNode) {
+        const { x, y } = existingNode.position;
+        const width = (existingNode.style?.width as number) || 1000;
+        const height = (existingNode.style?.height as number) || 600;
+        setCenter(x + width / 2, y + height / 2, { zoom: 1, duration: 800 });
+        return;
+      }
 
       const file = await handle.getFile();
-      const content = await file.text();
-      const lineCount = content.split("\n").length;
+      const ext = handle.name.split('.').pop()?.toLowerCase() || "";
+      const isImage = ["png", "webp", "jpg", "jpeg", "gif", "svg"].includes(ext);
 
-      const calculatedHeight = lineCount * 24 + 80;
-      const newNodeHeight = Math.min(calculatedHeight, 600);
+      let content = "";
+      let newNodeHeight = 450;
 
-      const lowestPoint = nodes.reduce((max, node) => {
-        const nodeBottom =
-          node.position.y + ((node.style?.height as number) || 200);
+      if (!isImage) {
+        content = await file.text();
+        const lineCount = content.split("\n").length;
+        newNodeHeight = Math.min(lineCount * 24 + 80, 600);
+      }
+
+      const lowestPoint = currentNodes.reduce((max, node) => {
+        const nodeBottom = node.position.y + ((node.style?.height as number) || 200);
         return Math.max(max, nodeBottom);
       }, 50);
 
@@ -72,7 +89,7 @@ export default function App() {
         );
       }, 100);
     },
-    [nodes, dispatch, setCenter],
+    [dispatch, setCenter],
   );
 
   return (
@@ -94,25 +111,19 @@ export default function App() {
 
       <main style={{ flex: 1, position: "relative", height: "100%" }}>
         <Canvas />
+
         <button
           onClick={() => {
-            if (
-              window.confirm(
-                "Are you sure you want to clear the entire workspace?",
-              )
-            ) {
+            if (window.confirm("Are you sure you want to clear the entire workspace?")) {
               dispatch(clearAllNodes());
             }
           }}
-          className="fixed bottom-6 right-6 z-50 p-3 bg-[#1e1e1e] hover:bg-red-500 border border-[#333] hover:border-red-500/50 text-gray-400 hover:text-white rounded-full shadow-2xl transition-all group"
-          title="Clear Workspace"
+          className="fixed bottom-6 right-6 z-50 p-3 bg-[#1e1e1e] hover:bg-red-500 border border-[#333] hover:border-red-500/50 text-gray-400 hover:text-white rounded-full shadow-2xl transition-all group flex items-center gap-2"
         >
-          <div className="flex items-center gap-2 px-1">
-            <span className="text-[11px] font-bold uppercase tracking-wider hidden group-hover:inline">
-              Clear Canvas
-            </span>
-            <span className="text-lg">🗑️</span>
-          </div>
+          <span className="text-[11px] font-bold uppercase tracking-wider hidden group-hover:inline ml-2">
+            Clear Canvas
+          </span>
+          <span className="text-lg px-1">🗑️</span>
         </button>
       </main>
     </div>

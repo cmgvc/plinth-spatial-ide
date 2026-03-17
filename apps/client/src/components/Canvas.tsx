@@ -1,6 +1,7 @@
 import ReactFlow, {
   Background,
   BackgroundVariant,
+  PanOnScrollMode,
   Node,
   OnNodesChange,
 } from "reactflow";
@@ -25,6 +26,11 @@ export default function Canvas({
         onNodesChange={onNodesChange}
         nodeTypes={nodeTypes}
         fitView
+        panOnScroll={true} // Move around with two fingers
+        panOnScrollMode={PanOnScrollMode.Free} // Allow diagonal movement
+        zoomOnPinch={true} // Zoom with pinch gesture
+        zoomOnScroll={false} // STOP zooming with two-finger scroll
+        preventScrolling={true} // Prevents the whole browser page from moving
       >
         <Background color="#222" variant={BackgroundVariant.Dots} gap={20} />
       </ReactFlow>

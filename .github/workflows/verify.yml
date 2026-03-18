@@ -13,16 +13,13 @@ jobs:
         with:
           node-version: 20
           cache: 'npm'
-          # Correctly points to the root lockfile
           cache-dependency-path: package-lock.json
 
       - name: Install dependencies
-        # Run this from the ROOT to link all workspaces correctly
         run: npm ci
 
       - name: Get Playwright version
         id: playwright-version
-        # We specify the working-directory here since it's inside the client app
         run: echo "version=$(npx playwright --version | cut -d' ' -f2)" >> $GITHUB_OUTPUT
         working-directory: apps/client
 
@@ -38,7 +35,7 @@ jobs:
         run: npx playwright install --with-deps
         working-directory: apps/client
 
-      - name: Build with Env Vars
+      - name: Build
         run: npm run build --workspace=client
         env:
           VITE_API_URL: https://plinth-spatial-ide.onrender.com
@@ -48,3 +45,12 @@ jobs:
 
       - name: Run E2E Tests
         run: npm run test:e2e --workspace=client
+        env:
+          VITE_API_URL: https://plinth-spatial-ide.onrender.com
+
+      - name: Deploy to GitHub Pages
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./apps/client/dist

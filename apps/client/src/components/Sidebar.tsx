@@ -1,134 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { ClearWorkspaceModal } from "./ClearWorkspaceModal";
-
-interface FileSystemHandle {
-  kind: "file" | "directory";
-  name: string;
-}
-interface FileSystemFileHandle extends FileSystemHandle {
-  kind: "file";
-  getFile(): Promise<File>;
-}
-interface FileSystemDirectoryHandle extends FileSystemHandle {
-  kind: "directory";
-  values(): AsyncIterableIterator<
-    FileSystemHandle | FileSystemDirectoryHandle | FileSystemFileHandle
-  >;
-}
-interface FileItem {
-  handle: FileSystemFileHandle;
-  path: string;
-}
-
-async function getAllFiles(
-  dirHandle: FileSystemDirectoryHandle,
-  path: string,
-): Promise<FileItem[]> {
-  let files: FileItem[] = [];
-  try {
-    for await (const entry of dirHandle.values()) {
-      const currentPath = `${path}/${entry.name}`;
-      if (
-        entry.name === "node_modules" ||
-        entry.name === ".git" ||
-        entry.name === "dist"
-      )
-        continue;
-
-      if (entry.kind === "directory") {
-        const nested = await getAllFiles(
-          entry as FileSystemDirectoryHandle,
-          currentPath,
-        );
-        files = [...files, ...nested];
-      } else {
-        files.push({
-          handle: entry as FileSystemFileHandle,
-          path: currentPath,
-        });
-      }
-    }
-  } catch (e) {
-    console.error("Recursive file search failed", e);
-  }
-  return files;
-}
-
-const ExplorerItem = ({
-  handle,
-  depth,
-  onFileSelect,
-  path,
-}: {
-  handle: any;
-  depth: number;
-  onFileSelect: any;
-  path: string;
-}) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [children, setChildren] = useState<FileSystemHandle[]>([]);
-  const isDirectory = handle.kind === "directory";
-
-  const toggleOpen = async () => {
-    if (!isDirectory) {
-      onFileSelect(handle as FileSystemFileHandle, path);
-      return;
-    }
-    if (!isOpen) {
-      const entries: FileSystemHandle[] = [];
-      for await (const entry of (
-        handle as FileSystemDirectoryHandle
-      ).values()) {
-        entries.push(entry);
-      }
-      setChildren(
-        entries.sort((a, b) =>
-          a.kind === b.kind
-            ? a.name.localeCompare(b.name)
-            : a.kind === "directory"
-              ? -1
-              : 1,
-        ),
-      );
-    }
-    setIsOpen(!isOpen);
-  };
-
-  return (
-    <div className="flex flex-col w-full select-none">
-      <button
-        onClick={toggleOpen}
-        className="group flex items-center py-[6px] w-full hover:bg-[#1a1a1a] transition-all border-l-2 border-transparent hover:border-blue-500/40"
-        style={{ paddingLeft: `${depth * 12 + 16}px` }}
-      >
-        <span
-          className={`mr-1.5 text-[8px] text-gray-600 transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`}
-        >
-          {isDirectory ? "▶" : ""}
-        </span>
-        <span className="mr-2 text-[14px] leading-none">
-          {isDirectory ? (isOpen ? "📂" : "📁") : "📄"}
-        </span>
-        <span className="truncate text-[12px] text-[#ccc] group-hover:text-white font-medium">
-          {handle.name}
-        </span>
-      </button>
-      {isOpen && isDirectory && (
-        <div className="flex flex-col w-full">
-          {children.map((child) => (
-            <ExplorerItem
-              key={`${path}/${child.name}`}
-              handle={child}
-              depth={depth + 1}
-              onFileSelect={onFileSelect}
-              path={`${path}/${child.name}`}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
+import { FileItem, getAllFiles } from "../utils/fileCrawler";
+import { ExplorerItem } from "./ExplorerItem";
 
 interface SidebarProps {
   onFileSelect: (handle: FileSystemFileHandle, path: string) => void;
@@ -137,73 +9,59 @@ interface SidebarProps {
   onLogout: () => void;
   hasNodes: boolean;
   username?: string;
-  persistedFolders?: string[]; 
+  persistedFolders?: string[];
 }
 
 export default function Sidebar({
   onFileSelect,
   onFolderUpload,
-  onClear,
   onLogout,
-  hasNodes,
   username,
   persistedFolders = [],
 }: SidebarProps) {
   const [roots, setRoots] = useState<FileSystemDirectoryHandle[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [allFiles, setAllFiles] = useState<FileItem[]>([]);
-  const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
+    let isMounted = true;
     const syncFiles = async () => {
-      let flatList: FileItem[] = [];
+      const flatList: FileItem[] = [];
       for (const root of roots) {
         const files = await getAllFiles(root, root.name);
-        flatList = [...flatList, ...files];
+        flatList.push(...files);
       }
-      setAllFiles(flatList);
+      if (isMounted) setAllFiles(flatList);
     };
     syncFiles();
+    return () => {
+      isMounted = false;
+    };
   }, [roots]);
 
   const filteredSearch = useMemo(() => {
-    if (!searchQuery) return [];
-    return allFiles.filter((f) =>
-      f.handle.name.toLowerCase().includes(searchQuery.toLowerCase()),
-    );
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) return [];
+    return allFiles
+      .filter((f) => f.handle.name.toLowerCase().includes(q))
+      .slice(0, 50);
   }, [searchQuery, allFiles]);
 
-  const triggerPicker = async (shouldClear: boolean) => {
+  const triggerPicker = async () => {
     try {
       const handle = await window.showDirectoryPicker();
+
+      setRoots((prev) =>
+        prev.find((r) => r.name === handle.name) ? prev : [...prev, handle],
+      );
+
       const newFiles = await getAllFiles(handle, handle.name);
-
-      if (shouldClear) {
-        onClear();
-        setRoots([handle]);
-      } else {
-        setRoots((prev) =>
-          prev.find((r) => r.name === handle.name) ? prev : [...prev, handle],
-        );
-      }
-
-      if (onFolderUpload) onFolderUpload(newFiles);
-      setShowModal(false);
+      onFolderUpload(newFiles);
     } catch (e) {
-      setShowModal(false);
-      console.error("Picker Action Failed:", e);
+      console.warn("User aborted directory selection");
     }
   };
 
-  const handleOpenClick = () => {
-    if (roots.length > 0 || hasNodes) {
-      setShowModal(true);
-    } else {
-      triggerPicker(true);
-    }
-  };
-
-  // Find folders saved in DB but not connected in this state
   const disconnectedFolders = useMemo(() => {
     return persistedFolders.filter(
       (name) => !roots.some((r) => r.name === name),
@@ -212,39 +70,33 @@ export default function Sidebar({
 
   return (
     <div className="w-full h-full bg-[#0a0a0a] flex flex-col text-[#ccc] overflow-hidden font-mono border-r border-[#1a1a1a]">
-      {showModal && (
-        <ClearWorkspaceModal
-          onConfirm={() => triggerPicker(true)}
-          onCancel={() => triggerPicker(false)}
-        />
-      )}
-
       {/* Header */}
       <div className="p-4 border-b border-[#1a1a1a] bg-[#0d0d0d] flex-shrink-0">
         <div className="flex items-center justify-between mb-4">
-          <span className="text-[9px] font-bold tracking-[0.2em] text-blue-500 uppercase">
+          <span className="text-[9px] font-bold tracking-[0.2em] text-blue-500 uppercase italic">
             Plinth
           </span>
-          <div className="flex items-center gap-1.5">
-            <div className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
-            <span className="text-[8px] text-gray-500 font-bold uppercase">
+          <div className="flex items-center gap-1.5 px-2 py-0.5 bg-white/5 rounded-full border border-white/5">
+            <div className="w-1 h-1 rounded-full bg-green-500 shadow-[0_0_5px_#22c55e]" />
+            <span className="text-[8px] text-gray-400 font-bold uppercase">
               {username || "User"}
             </span>
           </div>
         </div>
 
         <button
-          onClick={handleOpenClick}
-          className="w-full bg-[#111] hover:bg-blue-600/10 hover:border-blue-500/30 border border-[#222] text-[#aaa] hover:text-blue-400 text-[10px] py-2 rounded transition-all mb-3 font-bold uppercase tracking-widest active:scale-95"
+          onClick={triggerPicker}
+          className="w-full bg-[#111] hover:bg-blue-600/10 hover:border-blue-500/30 border border-[#222] text-[#aaa] hover:text-blue-400 text-[10px] py-2 rounded transition-all mb-3 font-bold uppercase tracking-widest active:scale-95 shadow-inner"
         >
-          {roots.length > 0 ? "+ Add Project" : "Open Folder"}
+          {roots.length > 0 ? "+ Mount Project" : "Open Folder"}
         </button>
+
         <input
           type="text"
-          placeholder="Search files..."
+          placeholder="SEARCH FILENAME..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full bg-[#050505] border border-[#222] rounded px-3 py-1.5 text-[11px] text-gray-300 focus:outline-none focus:border-blue-500/50 placeholder:text-gray-700 tracking-wide"
+          className="w-full bg-[#050505] border border-[#222] rounded px-3 py-1.5 text-[11px] text-gray-300 focus:outline-none focus:border-blue-500/50 placeholder:text-gray-700 tracking-wide transition-colors"
         />
       </div>
 
@@ -259,12 +111,12 @@ export default function Sidebar({
                 className="group flex flex-col px-4 py-2 hover:bg-[#1a1a1a] border-l-2 border-transparent hover:border-blue-500/40 text-left transition-all"
               >
                 <div className="flex items-center gap-2">
-                  <span className="text-[14px]">📄</span>
+                  <span className="text-sm">📄</span>
                   <span className="text-[12px] text-white font-medium truncate">
                     {file.handle.name}
                   </span>
                 </div>
-                <span className="text-[9px] text-gray-600 font-mono truncate ml-6">
+                <span className="text-[9px] text-gray-600 truncate ml-6">
                   {file.path}
                 </span>
               </button>
@@ -272,7 +124,6 @@ export default function Sidebar({
           </div>
         ) : (
           <>
-            {/* Active Connected Folders */}
             {roots.map((rootHandle) => (
               <ExplorerItem
                 key={`tree-${rootHandle.name}`}
@@ -283,26 +134,32 @@ export default function Sidebar({
               />
             ))}
 
-            {/* Ghost Folders */}
-            {disconnectedFolders.map((folderName) => (
-              <div
-                key={`ghost-${folderName}`}
-                className="flex items-center justify-between px-4 py-2 opacity-40 hover:opacity-100 transition-opacity"
-              >
-                <div className="flex items-center gap-2 overflow-hidden">
-                  <span className="text-[14px]">📁</span>
-                  <span className="text-[12px] font-medium truncate italic text-gray-400">
-                    {folderName}
-                  </span>
-                </div>
-                <button
-                  onClick={handleOpenClick}
-                  className="text-[8px] border border-blue-500/30 text-blue-400 px-1.5 py-0.5 rounded hover:bg-blue-500/10 uppercase font-bold"
-                >
-                  Link
-                </button>
+            {disconnectedFolders.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-[#1a1a1a]">
+                <span className="px-4 text-[8px] font-bold text-gray-700 uppercase tracking-widest mb-2 block">
+                  Inactive projects
+                </span>
+                {disconnectedFolders.map((folderName) => (
+                  <div
+                    key={`ghost-${folderName}`}
+                    className="flex items-center justify-between px-4 py-2 opacity-30 hover:opacity-100 group transition-all"
+                  >
+                    <div className="flex items-center gap-2 overflow-hidden">
+                      <span className="text-sm">📁</span>
+                      <span className="text-[12px] font-medium truncate italic text-gray-500">
+                        {folderName}
+                      </span>
+                    </div>
+                    <button
+                      onClick={triggerPicker}
+                      className="text-[8px] border border-blue-500/30 text-blue-400 px-1.5 py-0.5 rounded hover:bg-blue-500/10 uppercase font-bold opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      Relink
+                    </button>
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
           </>
         )}
       </div>
@@ -311,7 +168,7 @@ export default function Sidebar({
       <div className="p-3 border-t border-[#1a1a1a] bg-[#080808] flex-shrink-0">
         <button
           onClick={onLogout}
-          className="w-full flex items-center justify-between px-3 py-2 rounded-md group hover:bg-red-500/10 transition-all border border-transparent hover:border-red-500/20"
+          className="w-full flex items-center justify-between px-3 py-2 rounded group hover:bg-red-500/10 transition-all border border-transparent hover:border-red-500/20"
         >
           <div className="flex items-center gap-2.5">
             <svg
@@ -328,7 +185,7 @@ export default function Sidebar({
               <line x1="21" y1="12" x2="9" y2="12" />
             </svg>
             <span className="text-[9px] uppercase tracking-[0.15em] text-gray-600 group-hover:text-red-500 font-bold transition-colors">
-              End Session
+              Logout
             </span>
           </div>
           <span className="text-[8px] text-gray-800 font-bold group-hover:text-red-900">

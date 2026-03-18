@@ -33,7 +33,7 @@ cron.schedule("0 0 * * *", () => {
 });
 
 app.use(cors({
-  origin: ["http://localhost:5173", "http://127.0.0.1:5173"],
+  origin: ["https://cmgvc.github.io", "http://localhost:5173", "http://127.0.0.1:5173"],
   credentials: true,
 }));
 app.use(express.json());

@@ -15,8 +15,8 @@
   "license": "ISC",
   "description": "",
   "workspaces": [
-    "apps/*",
-    "packages/*"
+    "apps/client",
+    "apps/server"
   ],
   "devDependencies": {
     "@types/dockerode": "^4.0.1",

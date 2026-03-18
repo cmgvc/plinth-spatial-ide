@@ -4,9 +4,6 @@ on: [push, pull_request]
 jobs:
   test:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: apps/client
 
     steps:
       - uses: actions/checkout@v4
@@ -16,14 +13,18 @@ jobs:
         with:
           node-version: 20
           cache: 'npm'
+          # Correctly points to the root lockfile
           cache-dependency-path: package-lock.json
 
       - name: Install dependencies
-        run: npm ci 
+        # Run this from the ROOT to link all workspaces correctly
+        run: npm ci
 
       - name: Get Playwright version
         id: playwright-version
+        # We specify the working-directory here since it's inside the client app
         run: echo "version=$(npx playwright --version | cut -d' ' -f2)" >> $GITHUB_OUTPUT
+        working-directory: apps/client
 
       - name: Cache Playwright Browsers
         uses: actions/cache@v4
@@ -35,14 +36,15 @@ jobs:
       - name: Install Playwright Browsers
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx playwright install --with-deps
+        working-directory: apps/client
 
       - name: Build with Env Vars
-        run: npm run build
+        run: npm run build --workspace=client
         env:
           VITE_API_URL: https://plinth-spatial-ide.onrender.com
 
       - name: Run Unit Tests
-        run: npm run test
+        run: npm run test --workspace=client
 
       - name: Run E2E Tests
-        run: npm run test:e2e
+        run: npm run test:e2e --workspace=client

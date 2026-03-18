@@ -15,9 +15,11 @@ export default function LoginOverlay({
     setLoading(true);
     setStatus("AUTHENTICATING");
 
+    const baseURL = import.meta.env.VITE_API_URL || "http://localhost:5001";
+
     try {
       const { data } = await axios.post(
-        "http://localhost:5001/api/users/login",
+        `${baseURL}/api/users/login`,
         { email },
       );
       setStatus("CONNECTED");

@@ -15,7 +15,7 @@
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
-    "types": ["vitest/globals", "node"]
+    "types": ["node", "vite/client", "@types/wicg-file-system-access"],
   },
   "include": ["src", "../server/src/services/janitor.ts", "src/test"],
   "exclude": ["node_modules", "e2e"]

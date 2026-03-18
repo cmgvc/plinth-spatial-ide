@@ -21,7 +21,7 @@ export const ExplorerItem: React.FC<ExplorerItemProps> = ({
     }
     if (!isOpen && children.length === 0) {
       const entries: FileSystemHandle[] = [];
-      for await (const entry of (handle as FileSystemDirectoryHandle).values()) {
+      for await (const entry of (handle as any).values()) {
         entries.push(entry);
       }
       setChildren(entries.sort((a, b) => 

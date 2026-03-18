@@ -69,3 +69,4 @@ npx playwright test --ui
 - Text and drawing capability on canvas (implement layering?)
 - Add password protection 
 - Add localhost from within docker to different ports for each user if deployed
+- "Demo Mode" toggle for your App.tsx to skip the login and jump straight into the canvas

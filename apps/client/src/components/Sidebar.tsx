@@ -49,8 +49,7 @@ export default function Sidebar({
 
   const triggerPicker = async () => {
     try {
-      const handle = await window.showDirectoryPicker();
-
+      const handle = await (window as any).showDirectoryPicker();
       setRoots((prev) =>
         prev.find((r) => r.name === handle.name) ? prev : [...prev, handle],
       );
@@ -107,7 +106,7 @@ export default function Sidebar({
             {filteredSearch.map((file) => (
               <button
                 key={`search-${file.path}`}
-                onClick={() => onFileSelect(file.handle, file.path)}
+                onClick={() => onFileSelect(file.handle as any, file.path)}
                 className="group flex flex-col px-4 py-2 hover:bg-[#1a1a1a] border-l-2 border-transparent hover:border-blue-500/40 text-left transition-all"
               >
                 <div className="flex items-center gap-2">

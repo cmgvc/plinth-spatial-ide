@@ -119,7 +119,6 @@ export default function Canvas({ theme }: CanvasProps) {
             <Controls
               showFitView={false}
               showInteractive={false}
-              orientation="horizontal"
               style={{ position: "static", margin: 0 }}
             />
             <button

@@ -61,11 +61,13 @@ export default function FileNode({ id, data }: FileNodeProps) {
     const timer = setTimeout(async () => {
       setIsSaving(true);
       try {
-        const status = await data.fileHandle!.queryPermission({
+        const status = await (data.fileHandle as any).queryPermission({
           mode: "readwrite",
         });
         if (status !== "granted")
-          await data.fileHandle!.requestPermission({ mode: "readwrite" });
+          await (data.fileHandle as any).requestPermission({
+            mode: "readwrite",
+          });
 
         const writable = await data.fileHandle!.createWritable();
         await writable.write(localCode);

@@ -29,7 +29,7 @@ import {
   HelpIcon,
 } from "./utils/icons";
 
-const API_BASE = "http://localhost:5001/api/nodes";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5001/api/nodes";
 
 export default function App() {
   const dispatch = useDispatch();

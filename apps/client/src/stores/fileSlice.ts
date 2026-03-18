@@ -23,7 +23,7 @@ interface FileState {
   edges: Edge[];
 }
 
-const initialState: FileState = {
+export const initialState: FileState = {
   nodes: [
     {
       id: "1",

@@ -26,11 +26,12 @@ export default function App() {
       dispatch(
         setNodesInitial([
           {
-            id: "test-file.ts",
+            id: "test-file.ts", 
             type: "fileNode",
             position: { x: 100, y: 100 },
             data: {
               filename: "test-file.ts",
+              path: "test-file.ts",
               code: 'console.log("Hello from Playwright!");',
             },
             style: { width: 450, height: 200 },
@@ -41,10 +42,12 @@ export default function App() {
   }, [dispatch]);
 
   const handleFileSelect = useCallback(
-    async (handle: FileSystemFileHandle) => {
+    async (handle: FileSystemFileHandle, path?: string) => {
       const currentNodes = nodesRef.current;
+      
+      const nodeId = path || handle.name;
 
-      const existingNode = currentNodes.find((n) => n.id === handle.name);
+      const existingNode = currentNodes.find((n) => n.id === nodeId);
       if (existingNode) {
         const { x, y } = existingNode.position;
         const width = (existingNode.style?.width as number) || 1000;
@@ -55,9 +58,7 @@ export default function App() {
 
       const file = await handle.getFile();
       const ext = handle.name.split(".").pop()?.toLowerCase() || "";
-      const isImage = ["png", "webp", "jpg", "jpeg", "gif", "svg"].includes(
-        ext,
-      );
+      const isImage = ["png", "webp", "jpg", "jpeg", "gif", "svg"].includes(ext);
 
       let content = "";
       let newNodeHeight = 450;
@@ -75,12 +76,13 @@ export default function App() {
       }, 50);
 
       const newNode = {
-        id: handle.name,
+        id: nodeId,
         type: "fileNode",
         position: { x: 100, y: lowestPoint + 20 },
         style: { width: 1000, height: newNodeHeight },
         data: {
           filename: handle.name,
+          path: nodeId,
           code: content,
           fileHandle: handle,
         },
@@ -105,7 +107,7 @@ export default function App() {
         display: "flex",
         width: "100vw",
         height: "100vh",
-        backgroundColor: "#FFFFFF",
+        backgroundColor: "#0a0a0a", 
         color: "white",
         overflow: "hidden",
       }}
@@ -121,11 +123,7 @@ export default function App() {
 
         <button
           onClick={() => {
-            if (
-              window.confirm(
-                "Are you sure you want to clear the entire workspace?",
-              )
-            ) {
+            if (window.confirm("Are you sure you want to clear the entire workspace?")) {
               dispatch(clearAllNodes());
             }
           }}

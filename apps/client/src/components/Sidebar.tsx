@@ -1,173 +1,139 @@
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { ClearWorkspaceModal } from "./ClearWorkspaceModal";
 
-declare global {
-  interface Window {
-    showDirectoryPicker: (options?: any) => Promise<FileSystemDirectoryHandle>;
+async function getAllFiles(dirHandle: FileSystemDirectoryHandle, path = "") {
+  let files: { handle: FileSystemFileHandle; path: string }[] = [];
+  // @ts-ignore
+  for await (const entry of dirHandle.values()) {
+    const currentPath = path ? `${path}/${entry.name}` : entry.name;
+    if (entry.kind === "directory") {
+      files = [...files, ...(await getAllFiles(entry, currentPath))];
+    } else {
+      files.push({ handle: entry as FileSystemFileHandle, path: currentPath });
+    }
   }
+  return files;
 }
 
-const ExplorerItem = ({
-  handle,
-  depth,
-  onFileSelect,
-}: {
-  handle: FileSystemHandle;
-  depth: number;
-  onFileSelect: (h: FileSystemFileHandle) => void;
-}) => {
+const ExplorerItem = ({ handle, depth, onFileSelect, path = "" }: any) => {
   const [isOpen, setIsOpen] = useState(false);
   const [children, setChildren] = useState<FileSystemHandle[]>([]);
   const isDirectory = handle.kind === "directory";
 
+  const currentPath = path ? `${path}/${handle.name}` : handle.name;
+
   const toggleOpen = async () => {
     if (!isDirectory) {
-      onFileSelect(handle as FileSystemFileHandle);
+      onFileSelect(handle as FileSystemFileHandle, currentPath);
       return;
     }
-
     if (!isOpen) {
       const entries: FileSystemHandle[] = [];
-      // @ts-ignore - values() exists on DirectoryHandle
-      for await (const entry of handle.values()) {
-        entries.push(entry);
-      }
-      setChildren(
-        entries.sort((a, b) => {
-          if (a.kind === b.kind) return a.name.localeCompare(b.name);
-          return a.kind === "directory" ? -1 : 1;
-        }),
-      );
+      // @ts-ignore
+      for await (const entry of handle.values()) entries.push(entry);
+      setChildren(entries.sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === "directory" ? -1 : 1)));
     }
     setIsOpen(!isOpen);
   };
 
   return (
     <div className="flex flex-col w-full">
-      <button
-        onClick={toggleOpen}
-        className="group flex items-center py-[5px] w-full hover:bg-[#2a2d2e] transition-all border-l-2 border-transparent hover:border-blue-500/40"
-        style={{ paddingLeft: `${depth * 12 + 12}px` }}
-      >
-        <span
-          className={`mr-2 text-[9px] transition-transform duration-200 text-gray-500 ${isOpen ? "rotate-90" : ""}`}
-        >
-          {isDirectory ? "▶" : ""}
-        </span>
-        <span className="mr-2 text-[14px]">
-          {isDirectory ? (isOpen ? "📂" : "📁") : "📄"}
-        </span>
-        <span
-          className={`truncate text-[13px] tracking-tight ${isDirectory ? "font-medium text-[#ccc]" : "font-light text-[#aaa]"} group-hover:text-white`}
-        >
-          {handle.name}
-        </span>
+      <button onClick={toggleOpen} className="group flex items-center py-[4px] w-full hover:bg-[#1a1a1a] transition-all border-l-2 border-transparent hover:border-blue-500/40" style={{ paddingLeft: `${depth * 12 + 12}px` }}>
+        <span className={`mr-2 text-[8px] text-gray-600 ${isOpen ? "rotate-90" : ""}`}>{isDirectory ? "▶" : ""}</span>
+        <span className="mr-2 text-[14px]">{isDirectory ? (isOpen ? "📂" : "📁") : "📄"}</span>
+        <span className="truncate text-[12px] text-[#ccc] group-hover:text-white">{handle.name}</span>
       </button>
-
-      {isOpen && isDirectory && (
-        <div className="flex flex-col w-full">
-          {children.map((child) => (
-            <ExplorerItem
-              key={child.name}
-              handle={child}
-              depth={depth + 1}
-              onFileSelect={onFileSelect}
-            />
-          ))}
-        </div>
-      )}
+      {isOpen && isDirectory && children.map((child) => (
+        <ExplorerItem 
+          key={child.name} 
+          handle={child} 
+          depth={depth + 1} 
+          onFileSelect={onFileSelect} 
+          path={currentPath} 
+        />
+      ))}
     </div>
   );
 };
 
-export default function Sidebar({
-  onFileSelect,
-  onClear,
-  hasNodes,
-}: {
-  onFileSelect: (h: FileSystemFileHandle) => void;
-  onClear: () => void;
-  hasNodes: boolean;
-}) {
+export default function Sidebar({ onFileSelect, onClear, hasNodes }: any) {
   const [roots, setRoots] = useState<FileSystemDirectoryHandle[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [allFiles, setAllFiles] = useState<{ handle: FileSystemFileHandle; path: string }[]>([]);
   const [showModal, setShowModal] = useState(false);
+
+  useEffect(() => {
+    const syncFiles = async () => {
+      let flatList: any[] = [];
+      for (const root of roots) {
+        const files = await getAllFiles(root, root.name); 
+        flatList = [...flatList, ...files];
+      }
+      setAllFiles(flatList);
+    };
+    syncFiles();
+  }, [roots]);
+
+  const filteredSearch = useMemo(() => {
+    if (!searchQuery) return [];
+    return allFiles.filter(f => f.handle.name.toLowerCase().includes(searchQuery.toLowerCase()));
+  }, [searchQuery, allFiles]);
 
   const triggerPicker = async (shouldClear: boolean) => {
     try {
-      const handle = await window.showDirectoryPicker();
-
-      if (shouldClear) {
-        onClear();
-        setRoots([handle]);
-      } else {
-        setRoots((prev) =>
-          prev.find((r) => r.name === handle.name) ? prev : [...prev, handle],
-        );
-      }
+      const handle = await (window as any).showDirectoryPicker();
+      if (shouldClear) { onClear(); setRoots([handle]); }
+      else { setRoots(prev => prev.find(r => r.name === handle.name) ? prev : [...prev, handle]); }
       setShowModal(false);
-    } catch (e) {
-      console.log("Picker cancelled");
-      setShowModal(false);
-    }
-  };
-
-  const handleOpenFolderClick = () => {
-    if (roots.length > 0 || hasNodes) {
-      setShowModal(true);
-    } else {
-      triggerPicker(true);
-    }
+    } catch (e) { setShowModal(false); }
   };
 
   return (
-    <div className="w-72 bg-[#0a0a0a] border-r border-[#222] h-screen flex flex-col text-[#ccc] select-none overflow-hidden">
-      {showModal && (
-        <ClearWorkspaceModal
-          onConfirm={() => triggerPicker(true)}
-          onCancel={() => triggerPicker(false)}
-        />
-      )}
+    <div className="w-72 bg-[#0a0a0a] border-r border-[#1a1a1a] h-screen flex flex-col text-[#ccc] select-none overflow-hidden font-sans">
+      {showModal && <ClearWorkspaceModal onConfirm={() => triggerPicker(true)} onCancel={() => triggerPicker(false)} />}
 
-      <div className="p-5 border-b border-[#1a1a1a]">
-        <div className="flex items-center justify-between mb-4">
-          <span className="text-[10px] font-bold tracking-[0.2em] text-gray-600 uppercase">
-            Workspace
-          </span>
-          <div className="flex gap-1">
-            <div className="w-1.5 h-1.5 rounded-full bg-red-500/20" />
-            <div className="w-1.5 h-1.5 rounded-full bg-yellow-500/20" />
-            <div className="w-1.5 h-1.5 rounded-full bg-green-500/20" />
-          </div>
-        </div>
-
-        <button
-          onClick={handleOpenFolderClick}
-          className="w-full bg-[#1a1a1a] hover:bg-[#222] border border-[#333] text-[#eee] text-[12px] py-2 rounded-md transition-all active:scale-[0.97]"
-        >
+      <div className="p-4 border-b border-[#1a1a1a]">
+        <span className="text-[9px] font-bold tracking-[0.2em] text-gray-600 uppercase block mb-4">Explorer</span>
+        <button onClick={() => (roots.length > 0 || hasNodes ? setShowModal(true) : triggerPicker(true))} className="w-full bg-[#111] hover:bg-[#1a1a1a] border border-[#222] text-[#aaa] text-[11px] py-1.5 rounded transition-all mb-3">
           {roots.length > 0 ? "Add Folder" : "Open Folder"}
         </button>
+        <input
+          type="text"
+          placeholder="SEARCH FILES..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-full bg-[#050505] border border-[#222] rounded px-2 py-1.5 text-[10px] text-gray-300 focus:outline-none focus:border-blue-500/30 placeholder:text-gray-700 tracking-wider"
+        />
       </div>
 
-      <div className="flex-1 overflow-y-auto py-2 scrollbar-hide">
-        {roots.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center opacity-20 grayscale">
-            <span className="text-4xl mb-2">🔭</span>
-            <p className="text-[10px] uppercase tracking-widest font-bold">
-              Nothing found
-            </p>
+      <div className="flex-1 overflow-y-auto py-2 custom-scrollbar">
+        {searchQuery ? (
+          <div className="flex flex-col">
+            {filteredSearch.length > 0 ? filteredSearch.map((file) => (
+              <button
+                key={file.path}
+                onClick={() => onFileSelect(file.handle, file.path)}
+                className="group flex flex-col px-4 py-2 hover:bg-[#1a1a1a] border-l-2 border-transparent hover:border-blue-500/40 text-left transition-all"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-[14px]">📄</span>
+                  <span className="text-[12px] text-white font-medium truncate">{file.handle.name}</span>
+                </div>
+                <span className="text-[9px] text-gray-600 font-mono truncate ml-6">{file.path}</span>
+              </button>
+            )) : (
+              <div className="px-6 py-4 text-[10px] text-gray-600 italic">No matches found.</div>
+            )}
           </div>
         ) : (
           roots.map((rootHandle) => (
-            <div key={rootHandle.name} className="mb-4">
-              <div className="px-4 py-1 text-[9px] font-bold text-blue-500/50 uppercase tracking-widest border-b border-white/5 mb-1">
-                Project: {rootHandle.name}
-              </div>
-              <ExplorerItem
-                handle={rootHandle}
-                depth={0}
-                onFileSelect={onFileSelect}
-              />
-            </div>
+            <ExplorerItem 
+              key={rootHandle.name} 
+              handle={rootHandle} 
+              depth={0} 
+              onFileSelect={onFileSelect} 
+              path={rootHandle.name} 
+            />
           ))
         )}
       </div>

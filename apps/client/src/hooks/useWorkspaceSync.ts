@@ -1,7 +1,9 @@
 import { useCallback, useRef, useState } from "react";
 import axios from "axios";
 
-const USER_API = "http://localhost:5001/api/users";
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5001";
+const USER_API = `${API_BASE_URL}/api/users`;
+
 const WORKSPACE_PATH = `/home/workspace`;
 
 export function useWorkspaceSync(user: any, socket: any, isConnected: boolean, setUser: any) {

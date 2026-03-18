@@ -1,6 +1,7 @@
 import axios from 'axios';
 
-const API_BASE = 'http://localhost:5000/api';
+const ROOT_URL = import.meta.env.VITE_API_URL || "http://localhost:5001";
+export const API_BASE = `${ROOT_URL}/api`;
 
 export const syncNodes = async (nodes: any[]) => {
   try {

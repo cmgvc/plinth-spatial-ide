@@ -1,13 +1,12 @@
-import { useEffect, useRef } from "react";
+import React, { useEffect, useRef } from "react";
 import { Terminal } from "xterm";
 import { FitAddon } from "xterm-addon-fit";
-import { io, Socket } from "socket.io-client";
+import { getSocket } from "../services/socket";
 import "xterm/css/xterm.css";
 
 export default function TerminalWindow() {
   const terminalRef = useRef<HTMLDivElement>(null);
   const termInstance = useRef<Terminal | null>(null);
-  const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
     if (!terminalRef.current || termInstance.current) return;
@@ -17,50 +16,49 @@ export default function TerminalWindow() {
       fontSize: 12,
       fontFamily: 'Menlo, Monaco, "Courier New", monospace',
       theme: {
-        background: "#1a1a1a",
+        background: "#0d0d0d",
         foreground: "#d4d4d4",
         cursor: "#666666",
-        selectionBackground: "#333333",
-        blue: "#569cd6",
-        green: "#6a9955",
       },
     });
-
     const fitAddon = new FitAddon();
     term.loadAddon(fitAddon);
-    term.open(terminalRef.current);
+    const initTimeout = setTimeout(() => {
+      if (terminalRef.current) {
+        term.open(terminalRef.current);
+        fitAddon.fit();
+        term.focus();
+        socket.emit("terminal:input", "\n");
+      }
+    }, 150);
+
     termInstance.current = term;
+    const socket = getSocket();
 
-    const socket = io("http://localhost:5000", { transports: ["websocket"] });
-    socketRef.current = socket;
-    socket.on("connect", () => {
-      socket.emit("terminal-resize", {
-        cols: term.cols,
-        rows: term.rows,
-      });
-    });
-
-    socket.on("terminal-output", (data: string) => {
+    const handleOutput = (data: string) => {
       term.write(data);
-    });
+    };
 
+    socket.on("terminal-output", handleOutput);
+    socket.emit("terminal-resize", {
+      cols: term.cols,
+      rows: term.rows,
+    });
     term.onData((data) => {
       if (socket.connected) {
-        socket.emit("terminal-input", data);
+        socket.emit("terminal:input", data);
       }
     });
     const resizeObserver = new ResizeObserver(() => {
       try {
         fitAddon.fit();
-
-        if (term.cols > 0 && term.rows > 0) {
+        if (term.cols > 0 && term.rows > 0 && socket.connected) {
           socket.emit("terminal-resize", {
             cols: term.cols,
             rows: term.rows,
           });
         }
-      } catch (e) {
-      }
+      } catch (e) {}
     });
 
     if (terminalRef.current) {
@@ -68,15 +66,16 @@ export default function TerminalWindow() {
     }
 
     return () => {
+      clearTimeout(initTimeout);
       resizeObserver.disconnect();
-      socket.disconnect();
+      socket.off("terminal-output", handleOutput);
       term.dispose();
       termInstance.current = null;
     };
   }, []);
 
   return (
-    <div className="h-full w-full bg-[#1a1a1a] p-4">
+    <div className="h-full w-full bg-[#0d0d0d] p-2">
       <div ref={terminalRef} className="h-full w-full" />
     </div>
   );

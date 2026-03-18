@@ -19,8 +19,10 @@
     "packages/*"
   ],
   "devDependencies": {
+    "@types/dockerode": "^4.0.1",
     "autoprefixer": "^10.x.x",
     "concurrently": "^9.2.1",
+    "electron-builder": "^26.8.1",
     "nodemon": "^3.1.14",
     "postcss": "^8.x.x",
     "tailwindcss": "^3.x.x",
@@ -33,7 +35,11 @@
   },
   "dependencies": {
     "@reduxjs/toolkit": "^2.11.2",
+    "dockerode": "^4.0.9",
+    "electron": "^41.0.3",
+    "node-cron": "^4.2.1",
     "node-pty": "^1.1.0",
-    "react-redux": "^9.2.0"
+    "react-redux": "^9.2.0",
+    "uuid": "^13.0.0"
   }
 }

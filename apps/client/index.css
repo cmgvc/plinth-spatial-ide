@@ -92,3 +92,27 @@ textarea.whitespace-pre {
   padding-top: 1rem;
   padding-bottom: 1rem;
 }
+
+.react-flow__minimap {
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+.react-flow__minimap-node {
+  fill-opacity: 0.8;
+  rx: 5; 
+}
+
+.react-flow__controls {
+  background: #1c1c1c !important;
+  border: 1px solid #333 !important;
+  border-radius: 4px !important;
+}
+
+.react-flow__controls-button {
+  border-bottom: 1px solid #333 !important;
+  fill: #aaa !important;
+}
+
+.react-flow__controls-button:hover {
+  background: #2a2d2e !important;
+}

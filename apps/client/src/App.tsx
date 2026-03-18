@@ -2,7 +2,11 @@ import { useCallback, useEffect, useRef } from "react";
 import { useReactFlow } from "reactflow";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "./stores";
-import { setNodesInitial, nodesChanged, clearAllNodes } from "./stores/fileSlice";
+import {
+  setNodesInitial,
+  nodesChanged,
+  clearAllNodes,
+} from "./stores/fileSlice";
 import Sidebar from "./components/Sidebar";
 import Canvas from "./components/Canvas";
 
@@ -50,8 +54,10 @@ export default function App() {
       }
 
       const file = await handle.getFile();
-      const ext = handle.name.split('.').pop()?.toLowerCase() || "";
-      const isImage = ["png", "webp", "jpg", "jpeg", "gif", "svg"].includes(ext);
+      const ext = handle.name.split(".").pop()?.toLowerCase() || "";
+      const isImage = ["png", "webp", "jpg", "jpeg", "gif", "svg"].includes(
+        ext,
+      );
 
       let content = "";
       let newNodeHeight = 450;
@@ -63,7 +69,8 @@ export default function App() {
       }
 
       const lowestPoint = currentNodes.reduce((max, node) => {
-        const nodeBottom = node.position.y + ((node.style?.height as number) || 200);
+        const nodeBottom =
+          node.position.y + ((node.style?.height as number) || 200);
         return Math.max(max, nodeBottom);
       }, 50);
 
@@ -114,7 +121,11 @@ export default function App() {
 
         <button
           onClick={() => {
-            if (window.confirm("Are you sure you want to clear the entire workspace?")) {
+            if (
+              window.confirm(
+                "Are you sure you want to clear the entire workspace?",
+              )
+            ) {
               dispatch(clearAllNodes());
             }
           }}

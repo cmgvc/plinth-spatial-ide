@@ -24,20 +24,7 @@ interface FileState {
 }
 
 export const initialState: FileState = {
-  nodes: [
-    {
-      id: "1",
-      type: "fileNode",
-      position: { x: 100, y: 100 },
-      style: { width: 500, height: 100 },
-      data: {
-        filename: "main.ts",
-        code: "Welcome to Plinth - your new favourite code editor!",
-        path: "",
-        syncStatus: "synced"
-      },
-    },
-  ],
+  nodes: [],
   edges: [],
 };
 
@@ -79,7 +66,6 @@ const fileSlice = createSlice({
         node.data.syncStatus = 'syncing';
       }
     },
-
     clearAllNodes: (state) => {
       state.nodes = [];
       state.edges = [];

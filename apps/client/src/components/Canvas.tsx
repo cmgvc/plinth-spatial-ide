@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState, useEffect } from "react";
 import ReactFlow, {
   Background,
   BackgroundVariant,
@@ -6,6 +6,7 @@ import ReactFlow, {
   MiniMap,
   Controls,
   Panel,
+  useReactFlow,
 } from "reactflow";
 import { useSelector, useDispatch } from "react-redux";
 import { RootState } from "../stores";
@@ -24,11 +25,9 @@ interface CanvasProps {
 const MiniMapNode = ({ id, x, y, width, height, data, theme }: any) => {
   const nodes = useSelector((state: RootState) => state.files.nodes);
   const actualNode = nodes.find((n) => n.id === id);
-
   const rawName = data?.filename || actualNode?.data?.filename || id || "";
   const filename =
     rawName.length > 18 ? rawName.substring(0, 15) + "..." : rawName;
-
   const fill = theme === "dark" ? "#2a2a2a" : "#e0e0e0";
   const stroke = theme === "dark" ? "#444" : "#ccc";
   const textFill = theme === "dark" ? "#999" : "#666";
@@ -70,9 +69,27 @@ export default function Canvas({ theme }: CanvasProps) {
   const nodes = useSelector((state: RootState) => state.files.nodes);
   const edges = useSelector((state: RootState) => state.files.edges);
 
+  const { zoomIn, zoomOut } = useReactFlow();
+
   const onNodesChange = (changes: any) => dispatch(nodesChanged(changes));
   const onEdgesChange = (changes: any) => dispatch(edgesChanged(changes));
   const handleConnect = (connection: any) => dispatch(onConnect(connection));
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isModifier = e.metaKey || e.ctrlKey;
+      if (isModifier && (e.key === "=" || e.key === "+")) {
+        e.preventDefault();
+        zoomIn();
+      }
+      if (isModifier && e.key === "-") {
+        e.preventDefault();
+        zoomOut();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [zoomIn, zoomOut]);
 
   return (
     <div className="w-full h-full bg-[var(--bg-main)]">
@@ -94,27 +111,26 @@ export default function Canvas({ theme }: CanvasProps) {
           variant={BackgroundVariant.Dots}
           gap={20}
         />
-
-        <Controls
-          showFitView={false}
-          showInteractive={false}
-          position="bottom-left"
-          className="bg-[var(--bg-node)] border-[var(--border-color)] fill-[var(--text-main)]"
-        />
-
         <Panel
           position="top-right"
           className="flex flex-col items-end gap-3 m-4"
         >
-          <button
-            onClick={() => setShowMiniMap(!showMiniMap)}
-            className="group flex items-center gap-2 px-3 py-1.5 bg-[var(--bg-node)] border border-[var(--border-color)] rounded hover:border-blue-500 transition-all shadow-xl"
-          >
-            <span className="text-[10px] font-medium tracking-[0.1em] text-[var(--text-muted)] group-hover:text-[var(--text-main)] uppercase">
-              {showMiniMap ? "Hide Navigator" : "Show Navigator"}
-            </span>
-          </button>
-
+          <div className="flex items-center gap-2">
+            <Controls
+              showFitView={false}
+              showInteractive={false}
+              orientation="horizontal"
+              style={{ position: "static", margin: 0 }}
+            />
+            <button
+              onClick={() => setShowMiniMap(!showMiniMap)}
+              className="group flex items-center justify-center text-center w-[9vw] h-[4vh] px-3 bg-[var(--bg-node)] border border-[var(--border-color)] rounded hover:border-blue-500 transition-all shadow-xl"
+            >
+              <span className="text-[9px] font-bold tracking-[0.1em] text-[var(--text-muted)] group-hover:text-[var(--text-main)] uppercase w-full">
+                {showMiniMap ? "Hide Navigator" : "Show Navigator"}
+              </span>
+            </button>
+          </div>
           {showMiniMap && (
             <div className="overflow-hidden rounded-lg border border-[var(--border-color)] shadow-2xl transition-all">
               <MiniMap

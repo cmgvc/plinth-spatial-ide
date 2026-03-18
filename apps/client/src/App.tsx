@@ -285,8 +285,8 @@ export default function App() {
         const code = await file.text();
         const nodeId = uuidv4();
         const position = screenToFlowPosition({
-          x: window.innerWidth / 2,
-          y: window.innerHeight / 2,
+          x: window.innerWidth / 2 - 250,
+          y: window.innerHeight / 2 - 150,
         });
         dispatch(
           addNode({

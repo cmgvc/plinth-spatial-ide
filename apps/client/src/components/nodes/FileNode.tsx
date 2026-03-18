@@ -45,28 +45,24 @@ export default function FileNode({ id, data }: FileNodeProps) {
     return ["png", "webp", "jpg", "jpeg", "gif", "svg"].includes(ext || "");
   }, [data.filename]);
 
-  // Sync with Docker and Disk
   useEffect(() => {
     if (!isDirty || !data.fileHandle || isImage) return;
 
     const timer = setTimeout(async () => {
       setIsSaving(true);
       try {
-        // 1. Persistence to Local Disk
         const status = await data.fileHandle!.queryPermission({
           mode: "readwrite",
         });
-        if (status !== "granted") {
+        if (status !== "granted")
           await data.fileHandle!.requestPermission({ mode: "readwrite" });
-        }
 
         const writable = await data.fileHandle!.createWritable();
         await writable.write(localCode);
         await writable.close();
 
-        // Sync with Docker Sandbox
         const socket = getSocket();
-        if (socket && socket.connected) {
+        if (socket?.connected) {
           socket.emit("file-save", {
             fileName: data.filename,
             content: localCode,
@@ -93,11 +89,11 @@ export default function FileNode({ id, data }: FileNodeProps) {
     data.path,
   ]);
 
-  const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
     if (gutterRef.current) {
       gutterRef.current.scrollTop = e.currentTarget.scrollTop;
     }
-  }, []);
+  };
 
   useEffect(() => {
     let currentUrl: string | null = null;
@@ -114,9 +110,9 @@ export default function FileNode({ id, data }: FileNodeProps) {
 
   return (
     <div
-      className={`flex flex-col h-full bg-[#1e1e1e] border border-[#333] rounded-md shadow-2xl overflow-hidden ring-1 ring-white/10 ${isEditing ? "nodrag nopan" : ""}`}
+      className={`flex flex-col w-[50vw] h-[100vh] bg-[#1e1e1e] border border-[#333] rounded-md shadow-2xl overflow-hidden ring-1 ring-white/10 ${isEditing ? "nodrag nopan" : ""}`}
     >
-      {/* Node Header */}
+      {/* Header */}
       <div
         className="flex items-center justify-between bg-[#1a1a1b] px-3 py-2 border-b border-[#333] drag-handle cursor-grab active:cursor-grabbing"
         style={{ borderTop: `2px solid ${theme.color}` }}
@@ -127,24 +123,14 @@ export default function FileNode({ id, data }: FileNodeProps) {
               <span className="text-[11px] text-gray-200 font-bold font-mono truncate">
                 {data.filename}
               </span>
-
               {isSaving ? (
                 <div className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
               ) : isDirty ? (
-                <div
-                  className="w-1.5 h-1.5 rounded-full bg-orange-500/80"
-                  title="Unsaved changes"
-                />
+                <div className="w-1.5 h-1.5 rounded-full bg-orange-500/80" />
               ) : (
-                <div
-                  className="w-1.5 h-1.5 rounded-full bg-green-500/40"
-                  title="Synced"
-                />
+                <div className="w-1.5 h-1.5 rounded-full bg-green-500/40" />
               )}
             </div>
-            <span className="text-[8px] text-gray-600 font-mono truncate opacity-60 uppercase tracking-tighter">
-              {data.path}
-            </span>
           </div>
 
           {!isImage && (
@@ -153,13 +139,13 @@ export default function FileNode({ id, data }: FileNodeProps) {
                 onClick={() => setIsEditing(!isEditing)}
                 className={`text-[9px] px-2 py-0.5 rounded border font-bold transition-all ${isEditing ? "bg-blue-500/20 border-blue-500 text-blue-300" : "border-[#333] text-gray-500 hover:text-gray-300"}`}
               >
-                {isEditing ? "EDITING" : "VIEW"}
+                {isEditing ? "EDITOR: ON" : "EDITOR: OFF"}
               </button>
               <button
                 onClick={() => setIsScrollLocked(!isScrollLocked)}
-                className={`text-[9px] px-2 py-0.5 rounded border font-bold transition-all ${isScrollLocked ? "border-red-900/40 text-red-500/50" : "border-green-900/40 text-green-500/50"}`}
+                className={`text-[9px] px-2 py-0.5 rounded border font-bold transition-all ${isScrollLocked ? "border-red-900/40 text-red-500/50" : "bg-green-500/20 border-green-500 text-green-300"}`}
               >
-                {isScrollLocked ? "LOCKED" : "FREE"}
+                {isScrollLocked ? "SCROLL: LOCKED" : "SCROLL: ACTIVE"}
               </button>
             </div>
           )}
@@ -180,51 +166,46 @@ export default function FileNode({ id, data }: FileNodeProps) {
           </div>
         ) : (
           <>
-            {/* Line Numbers */}
+            {/* Line numbers */}
             <div
               ref={gutterRef}
-              className="bg-[#1c1c1c] text-[#4b535d] text-right px-3 py-4 select-none border-r border-[#2b2b2b] min-w-[45px] font-mono text-[11px] leading-6 overflow-hidden"
+              className="bg-[#1c1c1c] text-[#6e7681] text-right px-3 py-4 select-none border-r border-[#333] min-w-[45px] font-mono text-[12px] leading-6 overflow-hidden"
             >
               {lines.map((_, i) => (
                 <div key={i}>{i + 1}</div>
               ))}
             </div>
 
-            {/* Code Area */}
+            {/* Code area */}
             <div
-              ref={scrollContainerRef}
               onScroll={handleScroll}
-              className={`flex-1 relative ${isScrollLocked ? "overflow-hidden" : "overflow-auto custom-scrollbar nodrag nopan nowheel"}`}
+              className={`flex-1 relative ${
+                isScrollLocked
+                  ? "overflow-hidden hide-scrollbar"
+                  : "overflow-auto custom-scrollbar nodrag nopan nowheel"
+              }`}
+              style={{ height: "100%" }}
             >
-              <div className="grid grid-cols-1 grid-rows-1 min-h-full w-full">
+              {isEditing ? (
                 <textarea
                   value={localCode}
                   onChange={(e) => setLocalCode(e.target.value)}
                   spellCheck={false}
-                  autoCapitalize="off"
-                  autoComplete="off"
-                  className={`col-start-1 row-start-1 w-full p-4 bg-transparent text-[#d4d4d4] font-mono text-[13px] leading-6 resize-none outline-none border-none whitespace-pre z-10 transition-opacity ${isEditing ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+                  rows={lines.length}
+                  className="w-full p-4 bg-transparent text-[#d4d4d4] font-mono text-[13px] leading-6 resize-none outline-none border-none whitespace-pre hide-scrollbar block h-auto"
                 />
-                <pre
-                  className={`col-start-1 row-start-1 p-4 font-mono text-[13px] leading-6 text-[#d4d4d4] whitespace-pre transition-opacity ${!isEditing ? "opacity-100" : "opacity-0"}`}
-                >
-                  <code className="block">{localCode}</code>
+              ) : (
+                <pre className="p-4 font-mono text-[13px] leading-6 text-[#d4d4d4] whitespace-pre hide-scrollbar">
+                  <code>{localCode}</code>
                 </pre>
-              </div>
+              )}
             </div>
           </>
         )}
       </div>
-      <Handle
-        type="target"
-        position={Position.Top}
-        className="w-2 h-2 !bg-blue-500 opacity-0 group-hover:opacity-100"
-      />
-      <Handle
-        type="source"
-        position={Position.Bottom}
-        className="w-2 h-2 !bg-blue-500 opacity-0 group-hover:opacity-100"
-      />
+
+      <Handle type="target" position={Position.Top} className="opacity-0" />
+      <Handle type="source" position={Position.Bottom} className="opacity-0" />
     </div>
   );
 }

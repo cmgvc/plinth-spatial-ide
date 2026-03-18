@@ -8,7 +8,8 @@ const userSchema = new mongoose.Schema({
     name: String, 
     path: String 
   }],
-  lastActive: { type: Date, default: Date.now }
+  lastActive: { type: Date, default: Date.now },
+  isPro: {type: Boolean}
 });
 
 userSchema.pre("save", async function () {

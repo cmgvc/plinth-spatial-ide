@@ -1,7 +1,8 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
 export interface INode extends Document {
-  id: string;
+  userId: mongoose.Types.ObjectId;
+  nodeId: string;
   type: string;
   position: { x: number; y: number };
   data: {
@@ -13,7 +14,13 @@ export interface INode extends Document {
 }
 
 const NodeSchema: Schema = new Schema({
-  id: { type: String, required: true, unique: true },
+  userId: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'User', 
+    required: true,
+    index: true 
+  },
+  nodeId: { type: String, required: true },
   type: { type: String, default: 'fileNode' },
   position: {
     x: { type: Number, required: true },
@@ -29,5 +36,7 @@ const NodeSchema: Schema = new Schema({
     height: { type: Number },
   },
 }, { timestamps: true });
+
+NodeSchema.index({ userId: 1, nodeId: 1 }, { unique: true });
 
 export default mongoose.model<INode>('Node', NodeSchema);

@@ -1,5 +1,5 @@
-import { useState, useCallback, useEffect } from "react";
-import { useReactFlow } from "reactflow";
+import { useState, useCallback, useEffect, useRef } from "react";
+import { useReactFlow, ReactFlow, Background, Controls } from "reactflow";
 import { useDispatch, useSelector } from "react-redux";
 import { v4 as uuidv4 } from "uuid";
 import axios from "axios";
@@ -34,7 +34,6 @@ export default function App() {
   const dispatch = useDispatch();
   const nodes = useSelector((state: RootState) => state.files.nodes);
   const { setCenter, screenToFlowPosition, zoomIn, zoomOut } = useReactFlow();
-
   const [user, setUser] = useState<any>(null);
   const [showWelcome, setShowWelcome] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -44,7 +43,9 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [confirmConfig, setConfirmConfig] = useState<any>(null);
   const [isConnected, setIsConnected] = useState(false);
-
+  const [syncStatus, setSyncStatus] = useState<
+    "idle" | "saving" | "synced" | "error"
+  >("synced");
   const { isTerminalOpen, toggleTerminal, socket } = useTerminalSocket(
     user?.id,
   );
@@ -64,16 +65,19 @@ export default function App() {
     escape: () => setConfirmConfig(null),
   });
 
+  // Load user from local storage
   useEffect(() => {
     const saved = localStorage.getItem("blonde-user");
     if (saved) setUser(JSON.parse(saved));
   }, []);
 
+  // Theme manage
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
     localStorage.setItem("app-theme", theme);
   }, [theme]);
 
+  // Socket connectivity tracking
   useEffect(() => {
     if (!socket) return;
     const check = () => setIsConnected(socket.connected);
@@ -85,12 +89,41 @@ export default function App() {
     };
   }, [socket]);
 
+  // Load Nodes for this user
   useEffect(() => {
-    if (user)
+    if (user?.id) {
       axios
-        .get(API_BASE)
-        .then(({ data }) => data.length && dispatch(setNodesInitial(data)));
-  }, [user, dispatch]);
+        .get(`${API_BASE}/${user.id}`)
+        .then(({ data }) => {
+          if (data && data.length > 0) {
+            const mappedNodes = data.map((n: any) => ({
+              ...n,
+              id: n.nodeId,
+            }));
+            dispatch(setNodesInitial(mappedNodes));
+          }
+        })
+        .catch((err) => console.error("Cloud fetch failed:", err));
+    }
+  }, [user?.id, dispatch]);
+
+  // Auto save sync
+  useEffect(() => {
+    if (!user?.id || nodes.length === 0) return;
+
+    setSyncStatus("saving");
+    const handler = setTimeout(async () => {
+      try {
+        await axios.post(`${API_BASE}/sync/${user.id}`, { nodes });
+        setSyncStatus("synced");
+      } catch (err) {
+        setSyncStatus("error");
+        console.error("Cloud sync failed:", err);
+      }
+    }, 2000);
+
+    return () => clearTimeout(handler);
+  }, [nodes, user?.id]);
 
   const handleLogout = () =>
     setConfirmConfig({
@@ -98,6 +131,7 @@ export default function App() {
       message: "End session and clear local workspace state?",
       onConfirm: () => {
         localStorage.removeItem("blonde-user");
+        dispatch(clearAllNodes());
         setUser(null);
         setConfirmConfig(null);
       },
@@ -106,10 +140,20 @@ export default function App() {
   const handleClearWorkspace = () =>
     setConfirmConfig({
       title: "Clear Canvas",
-      message: "Remove all nodes? Files remain in terminal.",
+      message:
+        "Remove all nodes from the cloud and local canvas? Files remain in terminal.",
       type: "danger",
-      onConfirm: () => {
-        dispatch(clearAllNodes());
+      onConfirm: async () => {
+        if (user?.id) {
+          try {
+            await axios.delete(`${API_BASE}/clear/${user.id}`);
+            dispatch(clearAllNodes());
+          } catch (err) {
+            console.error("Failed to clear cloud workspace", err);
+          }
+        } else {
+          dispatch(clearAllNodes());
+        }
         setConfirmConfig(null);
       },
     });
@@ -119,8 +163,7 @@ export default function App() {
       if (nodes.length > 0) {
         setConfirmConfig({
           title: "Workspace Conflict",
-          message:
-            "You have active nodes. Would you like to clear the canvas before mounting this project?",
+          message: "Clear canvas before mounting this project?",
           onConfirm: () => {
             dispatch(clearAllNodes());
             syncFolder(files);
@@ -141,11 +184,12 @@ export default function App() {
   const handleFileSelect = useCallback(
     async (fileHandle: any, path: string) => {
       const existing = nodes.find((n) => n.data.path === path);
-      if (existing)
+      if (existing) {
         return setCenter(existing.position.x + 250, existing.position.y + 200, {
           zoom: 1.1,
           duration: 800,
         });
+      }
 
       const file = await fileHandle.getFile();
       const code = await file.text();
@@ -185,7 +229,7 @@ export default function App() {
     [nodes, setCenter, screenToFlowPosition, socket, dispatch],
   );
 
-  if (!user)
+  if (!user) {
     return (
       <LoginOverlay
         onLogin={(data) => {
@@ -195,6 +239,7 @@ export default function App() {
         }}
       />
     );
+  }
 
   return (
     <div className="flex w-screen h-screen overflow-hidden bg-[var(--bg-main)] text-[var(--text-main)] font-mono">
@@ -236,6 +281,18 @@ export default function App() {
               <SidebarIcon />
             </button>
             <div className="w-px h-4 bg-[var(--border-color)] mx-1" />
+
+            <div
+              className={`w-2 h-2 rounded-full mr-1 ${
+                syncStatus === "synced"
+                  ? "bg-green-500"
+                  : syncStatus === "saving"
+                    ? "bg-yellow-500 animate-pulse"
+                    : "bg-red-500"
+              }`}
+              title={syncStatus}
+            />
+
             <SearchIcon />
             <input
               id="node-search"
@@ -244,6 +301,7 @@ export default function App() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
+
             <div className="w-px h-4 bg-[var(--border-color)] mx-1" />
             <button
               onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
@@ -252,6 +310,7 @@ export default function App() {
             </button>
           </header>
 
+          {/* Help button */}
           <button
             onClick={() => setShowWelcome(true)}
             className="absolute bottom-6 left-6 z-50 p-3 bg-[var(--bg-node)] border border-[var(--border-color)] rounded-full shadow-2xl hover:border-blue-500/50 transition-all"
@@ -259,25 +318,34 @@ export default function App() {
             <HelpIcon />
           </button>
 
+          {/* Trash nodes button */}
           <button
             onClick={handleClearWorkspace}
-            className="absolute bottom-6 right-6 z-50 p-3 bg-[var(--bg-node)] border border-[var(--border-color)] rounded-full shadow-2xl hover:border-red-500/50 transition-all text-red-500"
+            className="absolute bottom-6 right-6 z-50 p-3 bg-[var(--bg-node)] border border-[var(--border-color)] rounded-full shadow-2xl hover:border-red-500/50 transition-all text-red-500 group"
+            title="Clear Workspace"
           >
             <svg
-              width="16"
-              height="16"
+              width="18"
+              height="18"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
               strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="group-hover:scale-110 transition-transform"
             >
               <path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+              <line x1="10" y1="11" x2="10" y2="17" />
+              <line x1="14" y1="11" x2="14" y2="17" />
             </svg>
           </button>
         </div>
 
         <section
-          className={`w-full border-t border-[var(--border-color)] bg-[#0d0d0d] transition-all ${isTerminalOpen ? "h-72" : "h-0"} overflow-hidden`}
+          className={`w-full border-t border-[var(--border-color)] bg-[#0d0d0d] transition-all ${
+            isTerminalOpen ? "h-72" : "h-0"
+          } overflow-hidden`}
         >
           <TerminalWindow />
         </section>

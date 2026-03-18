@@ -9,30 +9,41 @@ import Docker from "dockerode";
 import cron from "node-cron";
 import userRoutes from "./routes/userRoutes";
 import { cleanupAbandonedVolumes } from "./services/janitor";
-import { User } from "./models/User"; 
+import { User } from "./models/User";
 
 dotenv.config();
 
 const app = express();
-const docker = new Docker({ socketPath: `/Users/chloe/.docker/run/docker.sock` });
-const PORT = 5001; 
+const docker = new Docker({
+  socketPath: `/Users/chloe/.docker/run/docker.sock`,
+});
+const PORT = 5001;
 
 cron.schedule("0 0 * * *", () => {
   cleanupAbandonedVolumes();
 });
 
-app.use(cors({ origin: ["http://localhost:5173", "http://127.0.0.1:5173"], credentials: true }));
+app.use(
+  cors({
+    origin: ["http://localhost:5173", "http://127.0.0.1:5173"],
+    credentials: true,
+  }),
+);
 app.use(express.json());
 app.use("/api/nodes", nodeRoutes);
 app.use("/api/users", userRoutes);
 
-mongoose.connect(process.env.MONGODB_URI!)
+mongoose
+  .connect(process.env.MONGODB_URI!)
   .then(() => console.log("Connected to MongoDB"))
   .catch((err) => console.error("MongoDB Error:", err.message));
 
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: { origin: ["http://localhost:5173", "http://127.0.0.1:5173"], methods: ["GET", "POST"] },
+  cors: {
+    origin: ["http://localhost:5173", "http://127.0.0.1:5173"],
+    methods: ["GET", "POST"],
+  },
 });
 
 io.on("connection", async (socket) => {
@@ -44,17 +55,20 @@ io.on("connection", async (socket) => {
   try {
     const user = await User.findById(userId);
     if (!user) {
-      socket.emit("terminal-output", "\r\n\x1b[31m[Error: User profile not found]\x1b[0m\r\n");
+      socket.emit(
+        "terminal-output",
+        "\r\n\x1b[31m[Error: User profile not found]\x1b[0m\r\n",
+      );
       return socket.disconnect();
     }
-    const userVolume = user.workspaceVolume; 
+    const userVolume = user.workspaceVolume;
     console.log(`User ${user.username} connected - Mounting ${userVolume}`);
     user.lastActive = new Date();
     await user.save();
     await docker.createVolume({ Name: userVolume }).catch(() => {});
 
     const container = await docker.createContainer({
-      Image: "alpine",
+      Image: "node:20-alpine",
       Tty: true,
       OpenStdin: true,
       AttachStdin: true,
@@ -64,25 +78,36 @@ io.on("connection", async (socket) => {
       WorkingDir: "/home/workspace",
       HostConfig: {
         Binds: [`${userVolume}:/home/workspace`],
-        Memory: 128 * 1024 * 1024,
-        NanoCpus: 500000000,
+        Memory: 1024 * 1024 * 1024,
+        MemorySwap: 2048 * 1024 * 1024,
+        NanoCpus: 1000000000,
       },
     });
     await container.start();
     const setupExec = await container.exec({
-      Cmd: ['sh', '-c', 'command -v npm >/dev/null 2>&1 || apk add --no-cache nodejs npm'],
+      Cmd: [
+        "sh",
+        "-c",
+        "command -v npm >/dev/null 2>&1 || apk add --no-cache nodejs npm",
+      ],
       AttachStdout: true,
-      AttachStderr: true
+      AttachStderr: true,
     });
     setupExec.start({});
 
     const stream = await container.attach({
-      stream: true, stdin: true, stdout: true, stderr: true, hijack: true
+      stream: true,
+      stdin: true,
+      stdout: true,
+      stderr: true,
+      hijack: true,
     });
 
     socket.emit("container-ready");
 
-    stream.on("data", (chunk) => socket.emit("terminal-output", chunk.toString()));
+    stream.on("data", (chunk) =>
+      socket.emit("terminal-output", chunk.toString()),
+    );
 
     socket.on("terminal:input", (data) => {
       if (stream && (stream as any).writable) stream.write(Buffer.from(data));
@@ -90,7 +115,7 @@ io.on("connection", async (socket) => {
 
     socket.on("file-save", ({ fileName, content, isBase64 }) => {
       if (stream && (stream as any).writable) {
-        const command = isBase64 
+        const command = isBase64
           ? `mkdir -p "$(dirname "${fileName}")" && echo "${content}" | base64 -d > "${fileName}"\n`
           : `mkdir -p "$(dirname "${fileName}")" && cat << 'EOF' > "${fileName}"\n${content}\nEOF\n`;
         stream.write(Buffer.from(command));
@@ -106,12 +131,16 @@ io.on("connection", async (socket) => {
       try {
         await container.stop({ t: 2 });
         await container.remove();
-      } catch (e) { console.error("Cleanup Error", e); }
+      } catch (e) {
+        console.error("Cleanup Error", e);
+      }
     });
-
   } catch (err: any) {
     console.error("Sandbox Error:", err.message);
-    socket.emit("terminal-output", `\r\n\x1b[31m[Sandbox Error: ${err.message}]\x1b[0m\r\n`);
+    socket.emit(
+      "terminal-output",
+      `\r\n\x1b[31m[Sandbox Error: ${err.message}]\x1b[0m\r\n`,
+    );
   }
 });
 

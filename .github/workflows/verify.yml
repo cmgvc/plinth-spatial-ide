@@ -4,6 +4,10 @@ on: [push, pull_request]
 jobs:
   test:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/client
+
     steps:
       - uses: actions/checkout@v4
 
@@ -11,7 +15,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm' 
+          cache: 'npm'
+          cache-dependency-path: apps/client/package-lock.json
 
       - name: Install dependencies
         run: npm ci 
@@ -30,6 +35,11 @@ jobs:
       - name: Install Playwright Browsers
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx playwright install --with-deps
+
+      - name: Build with Env Vars
+        run: npm run build
+        env:
+          VITE_API_URL: https://plinth-spatial-ide.onrender.com
 
       - name: Run Unit Tests
         run: npm run test

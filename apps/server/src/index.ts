@@ -22,7 +22,7 @@ const dockerSocket = isMac
   : "/var/run/docker.sock";
 
 const docker = new Docker({ socketPath: dockerSocket });
-const PORT = 5001;
+const PORT = process.env.PORT || 5001;
 
 let activeContainers = 0;
 const MAX_FREE_CONCURRENCY = 5;

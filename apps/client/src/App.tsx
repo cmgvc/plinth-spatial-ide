@@ -30,6 +30,7 @@ import {
 } from "./utils/icons";
 
 const ROOT_URL = import.meta.env.VITE_API_URL;
+
 export const API_BASE = `${ROOT_URL}/api`;
 
 export default function App() {

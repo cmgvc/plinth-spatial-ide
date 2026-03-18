@@ -17,13 +17,21 @@ const nodeTypes = {
   fileNode: FileNode,
 };
 
-const MiniMapNode = ({ id, x, y, width, height, data }: any) => {
+interface CanvasProps {
+  theme: "dark" | "light";
+}
+
+const MiniMapNode = ({ id, x, y, width, height, data, theme }: any) => {
   const nodes = useSelector((state: RootState) => state.files.nodes);
   const actualNode = nodes.find((n) => n.id === id);
 
   const rawName = data?.filename || actualNode?.data?.filename || id || "";
   const filename =
     rawName.length > 18 ? rawName.substring(0, 15) + "..." : rawName;
+
+  const fill = theme === "dark" ? "#2a2a2a" : "#e0e0e0";
+  const stroke = theme === "dark" ? "#444" : "#ccc";
+  const textFill = theme === "dark" ? "#999" : "#666";
 
   return (
     <g>
@@ -34,8 +42,8 @@ const MiniMapNode = ({ id, x, y, width, height, data }: any) => {
         ry="10"
         width={width}
         height={height}
-        fill="#2a2a2a"
-        stroke="#444"
+        fill={fill}
+        stroke={stroke}
         strokeWidth="2"
       />
       <text
@@ -44,7 +52,7 @@ const MiniMapNode = ({ id, x, y, width, height, data }: any) => {
         textAnchor="middle"
         style={{
           fontSize: "40px",
-          fill: "#999",
+          fill: textFill,
           fontWeight: "500",
           fontFamily: "Inter, sans-serif",
           pointerEvents: "none",
@@ -56,7 +64,7 @@ const MiniMapNode = ({ id, x, y, width, height, data }: any) => {
   );
 };
 
-export default function Canvas() {
+export default function Canvas({ theme }: CanvasProps) {
   const [showMiniMap, setShowMiniMap] = useState(true);
   const dispatch = useDispatch();
   const nodes = useSelector((state: RootState) => state.files.nodes);
@@ -67,7 +75,7 @@ export default function Canvas() {
   const handleConnect = (connection: any) => dispatch(onConnect(connection));
 
   return (
-    <div style={{ width: "100%", height: "100%", backgroundColor: "#0a0a0a" }}>
+    <div className="w-full h-full bg-[var(--bg-main)]">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -81,12 +89,17 @@ export default function Canvas() {
         zoomOnPinch={true}
         zoomOnScroll={false}
       >
-        <Background color="#1a1a1a" variant={BackgroundVariant.Dots} gap={20} />
+        <Background
+          color={theme === "dark" ? "#333" : "#bbb"}
+          variant={BackgroundVariant.Dots}
+          gap={20}
+        />
 
         <Controls
           showFitView={false}
           showInteractive={false}
           position="bottom-left"
+          className="bg-[var(--bg-node)] border-[var(--border-color)] fill-[var(--text-main)]"
         />
 
         <Panel
@@ -95,25 +108,31 @@ export default function Canvas() {
         >
           <button
             onClick={() => setShowMiniMap(!showMiniMap)}
-            className="group flex items-center gap-2 px-3 py-1.5 bg-[#1a1a1a] border border-[#333] rounded hover:border-[#555] transition-all"
+            className="group flex items-center gap-2 px-3 py-1.5 bg-[var(--bg-node)] border border-[var(--border-color)] rounded hover:border-blue-500 transition-all shadow-xl"
           >
-            <span className="text-[10px] font-medium tracking-[0.1em] text-gray-500 group-hover:text-gray-300 uppercase">
+            <span className="text-[10px] font-medium tracking-[0.1em] text-[var(--text-muted)] group-hover:text-[var(--text-main)] uppercase">
               {showMiniMap ? "Hide Navigator" : "Show Navigator"}
             </span>
           </button>
 
           {showMiniMap && (
-            <div className="overflow-hidden rounded-lg border border-[#222] shadow-2xl transition-all">
+            <div className="overflow-hidden rounded-lg border border-[var(--border-color)] shadow-2xl transition-all">
               <MiniMap
-                nodeComponent={MiniMapNode}
+                nodeComponent={(props) => (
+                  <MiniMapNode {...props} theme={theme} />
+                )}
                 style={{
                   position: "static",
-                  backgroundColor: "#0d0d0d",
+                  backgroundColor: theme === "dark" ? "#0d0d0d" : "#f9f9f9",
                   width: 200,
                   height: 120,
                   margin: 0,
                 }}
-                maskColor="rgba(255, 255, 255, 0.03)"
+                maskColor={
+                  theme === "dark"
+                    ? "rgba(255, 255, 255, 0.05)"
+                    : "rgba(0, 0, 0, 0.05)"
+                }
                 zoomable
                 pannable
               />

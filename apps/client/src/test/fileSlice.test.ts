@@ -5,7 +5,6 @@ import reducer, {
   updateNodeCode,
   clearAllNodes,
   setNodesInitial,
-  initialState,
 } from "../stores/fileSlice"; 
 import { Node } from "reactflow";
 
@@ -21,16 +20,20 @@ const createMockNode = (id: string, filename: string): Node => ({
   },
 });
 
+const populatedState = {
+  nodes: [createMockNode("1", "welcome.ts")],
+  edges: [],
+};
+
 describe("File Slice Redux Logic", () => {
-  it('should initialize with the default "Welcome" node', () => {
+  it('should initialize with an empty node list', () => {
     const state = reducer(undefined, { type: "@@INIT" });
-    expect(state.nodes).toHaveLength(1);
-    expect(state.nodes[0].data.filename).toBe("main.ts");
+    expect(state.nodes).toHaveLength(0);
   });
 
   it("should handle setNodesInitial by replacing existing nodes", () => {
     const newNodes = [createMockNode("2", "app.ts")];
-    const state = reducer(initialState, setNodesInitial(newNodes));
+    const state = reducer(populatedState, setNodesInitial(newNodes));
 
     expect(state.nodes).toHaveLength(1);
     expect(state.nodes[0].id).toBe("2");
@@ -38,7 +41,7 @@ describe("File Slice Redux Logic", () => {
 
   it("should add a new node to the existing list", () => {
     const newNode = createMockNode("3", "utils.ts");
-    const state = reducer(initialState, addNode(newNode));
+    const state = reducer(populatedState, addNode(newNode));
 
     expect(state.nodes).toHaveLength(2);
     expect(state.nodes[1].data.filename).toBe("utils.ts");
@@ -46,16 +49,17 @@ describe("File Slice Redux Logic", () => {
 
   it("should update only the sync status of a specific node", () => {
     const state = reducer(
-      initialState,
+      populatedState,
       updateNodeStatus({ id: "1", status: "syncing" }),
     );
     expect(state.nodes[0].data.syncStatus).toBe("syncing");
+    expect(state.nodes[0].data.filename).toBe("welcome.ts");
   });
 
   it('should update code and automatically set status to "syncing"', () => {
     const newCode = "const x = 10;";
     const state = reducer(
-      initialState,
+      populatedState,
       updateNodeCode({ id: "1", code: newCode }),
     );
 
@@ -75,11 +79,12 @@ describe("File Slice Redux Logic", () => {
     expect(state.edges).toHaveLength(0);
   });
 
-  it("should not crash when updating a non-existent node", () => {
+  it("should not crash or modify when updating a non-existent node", () => {
     const state = reducer(
-      initialState,
+      populatedState,
       updateNodeStatus({ id: "999", status: "error" }),
     );
     expect(state.nodes[0].data.syncStatus).toBe("synced");
+    expect(state.nodes).toHaveLength(1);
   });
 });

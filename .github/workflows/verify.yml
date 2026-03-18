@@ -35,8 +35,8 @@ jobs:
         run: npx playwright install --with-deps
         working-directory: apps/client
 
-      - name: Build
-        run: npm run build --workspace=client
+      - name: Build with Env Vars
+        run: npm run build --workspace=client -- --mode production
         env:
           VITE_API_URL: https://plinth-spatial-ide.onrender.com
 

@@ -1,12 +1,7 @@
-import React, {
-  useState,
-  useRef,
-  useMemo,
-  useEffect,
-  useCallback,
-} from "react";
+import React, { useState, useRef, useMemo, useEffect } from "react";
 import { useDispatch } from "react-redux";
-import { updateNodeCode } from "../../stores/fileSlice";
+import { setConfirm } from "../../stores/uiSlice";
+import { updateNodeCode, removeNode } from "../../stores/fileSlice";
 import { Handle, Position } from "reactflow";
 import { useFileTheme } from "../../hooks/useFileTheme";
 import { getSocket } from "../../services/socket";
@@ -23,7 +18,6 @@ interface FileNodeProps {
 
 export default function FileNode({ id, data }: FileNodeProps) {
   const dispatch = useDispatch();
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const gutterRef = useRef<HTMLDivElement>(null);
 
   const [isEditing, setIsEditing] = useState(false);
@@ -44,6 +38,22 @@ export default function FileNode({ id, data }: FileNodeProps) {
     const ext = data.filename.split(".").pop()?.toLowerCase();
     return ["png", "webp", "jpg", "jpeg", "gif", "svg"].includes(ext || "");
   }, [data.filename]);
+
+  const handleDelete = (e: React.MouseEvent) => {
+    e.stopPropagation();
+
+    dispatch(
+      setConfirm({
+        title: "Remove Node",
+        message: `Are you sure you want to remove ${data.filename} from the canvas?`,
+        type: "danger",
+        onConfirm: () => {
+          dispatch(removeNode(id));
+          dispatch(setConfirm(null));
+        },
+      }),
+    );
+  };
 
   useEffect(() => {
     if (!isDirty || !data.fileHandle || isImage) return;
@@ -149,6 +159,30 @@ export default function FileNode({ id, data }: FileNodeProps) {
               </button>
             </div>
           )}
+        </div>
+
+        {/* Delete button */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleDelete}
+            className="nodrag p-1 hover:bg-red-500/20 rounded transition-colors group"
+            title="Remove from canvas"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="text-gray-500 group-hover:text-red-500"
+            >
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
         </div>
       </div>
 

@@ -12,44 +12,39 @@ router.get("/:userId", async (req, res) => {
       return res.status(400).json({ message: "Invalid User ID" });
     }
 
-    const nodes = await Node.find({ userId });
-    res.json(nodes);
+    const container = await Node.findOne({ userId });
+
+    if (!container) {
+      return res.status(200).json({ nodes: [] });
+    }
+
+    res.json(container);
   } catch (err) {
     res.status(500).json({ message: "Error fetching nodes" });
   }
 });
 
 router.post("/sync/:userId", async (req, res) => {
+  const { userId } = req.params;
+  const { nodes } = req.body;
+
   try {
-    const { userId } = req.params;
-    const { nodes } = req.body;
-
-    if (!mongoose.Types.ObjectId.isValid(userId)) {
-      return res.status(400).json({ message: "Invalid User ID" });
-    }
-
-    const ops = nodes.map((node: any) => ({
-      updateOne: {
-        filter: { nodeId: node.id, userId: userId },
-        update: {
-          $set: {
-            ...node,
-            nodeId: node.id,
-            userId: userId,
-          },
-        },
-        upsert: true,
+    const result = await Node.findOneAndUpdate(
+      { userId },
+      {
+        nodes: nodes.map((n: any) => ({
+          ...n,
+          nodeId: n.id,
+        })),
+        lastSynced: new Date(),
       },
-    }));
+      { upsert: true, new: true },
+    );
 
-    if (ops.length > 0) {
-      await Node.bulkWrite(ops);
-    }
-
-    res.json({ success: true });
+    res.status(200).json({ success: true, count: result?.nodes?.length || 0 });
   } catch (err) {
     console.error("Sync Error:", err);
-    res.status(500).json({ message: "Error syncing nodes" });
+    res.status(500).json({ error: "Failed to sync canvas to cloud." });
   }
 });
 
@@ -61,7 +56,7 @@ router.delete("/clear/:userId", async (req, res) => {
       return res.status(400).json({ message: "Invalid User ID" });
     }
 
-    await Node.deleteMany({ userId });
+    await Node.deleteOne({ userId });
     res.json({ message: "User workspace cleared" });
   } catch (err) {
     res.status(500).json({ message: "Error clearing nodes" });

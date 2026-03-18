@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useReactFlow, ReactFlow, Background, Controls } from "reactflow";
 import { useDispatch, useSelector } from "react-redux";
 import { v4 as uuidv4 } from "uuid";
@@ -10,6 +10,7 @@ import {
   addNode,
   updateNodeStatus,
 } from "./stores/fileSlice";
+import { setConfirm } from "./stores/uiSlice";
 import { useTerminalSocket } from "./hooks/useTerminalSocket";
 import { useWorkspaceSync } from "./hooks/useWorkspaceSync";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
@@ -33,6 +34,9 @@ const API_BASE = "http://localhost:5001/api/nodes";
 export default function App() {
   const dispatch = useDispatch();
   const nodes = useSelector((state: RootState) => state.files.nodes);
+  const confirmConfig = useSelector(
+    (state: RootState) => state.ui.confirmConfig,
+  );
   const { setCenter, screenToFlowPosition, zoomIn, zoomOut } = useReactFlow();
   const [user, setUser] = useState<any>(null);
   const [showWelcome, setShowWelcome] = useState(false);
@@ -41,11 +45,11 @@ export default function App() {
     () => (localStorage.getItem("app-theme") as any) || "dark",
   );
   const [searchQuery, setSearchQuery] = useState("");
-  const [confirmConfig, setConfirmConfig] = useState<any>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [syncStatus, setSyncStatus] = useState<
     "idle" | "saving" | "synced" | "error"
   >("synced");
+
   const { isTerminalOpen, toggleTerminal, socket } = useTerminalSocket(
     user?.id,
   );
@@ -62,22 +66,19 @@ export default function App() {
     f: () => document.getElementById("node-search")?.focus(),
     "=": () => zoomIn(),
     "-": () => zoomOut(),
-    escape: () => setConfirmConfig(null),
+    escape: () => dispatch(setConfirm(null)),
   });
 
-  // Load user from local storage
   useEffect(() => {
     const saved = localStorage.getItem("blonde-user");
     if (saved) setUser(JSON.parse(saved));
   }, []);
 
-  // Theme manage
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
     localStorage.setItem("app-theme", theme);
   }, [theme]);
 
-  // Socket connectivity tracking
   useEffect(() => {
     if (!socket) return;
     const check = () => setIsConnected(socket.connected);
@@ -89,28 +90,29 @@ export default function App() {
     };
   }, [socket]);
 
-  // Load Nodes for this user
   useEffect(() => {
     if (user?.id) {
       axios
         .get(`${API_BASE}/${user.id}`)
         .then(({ data }) => {
-          if (data && data.length > 0) {
-            const mappedNodes = data.map((n: any) => ({
+          if (data && data.nodes && data.nodes.length > 0) {
+            const mappedNodes = data.nodes.map((n: any) => ({
               ...n,
               id: n.nodeId,
             }));
             dispatch(setNodesInitial(mappedNodes));
           }
         })
-        .catch((err) => console.error("Cloud fetch failed:", err));
+        .catch((err) => {
+          if (err.response?.status !== 404) {
+            console.error("Cloud fetch failed:", err);
+          }
+        });
     }
   }, [user?.id, dispatch]);
 
-  // Auto save sync
   useEffect(() => {
-    if (!user?.id || nodes.length === 0) return;
-
+    if (!user?.id) return;
     setSyncStatus("saving");
     const handler = setTimeout(async () => {
       try {
@@ -126,54 +128,60 @@ export default function App() {
   }, [nodes, user?.id]);
 
   const handleLogout = () =>
-    setConfirmConfig({
-      title: "System Termination",
-      message: "End session and clear local workspace state?",
-      onConfirm: () => {
-        localStorage.removeItem("blonde-user");
-        dispatch(clearAllNodes());
-        setUser(null);
-        setConfirmConfig(null);
-      },
-    });
+    dispatch(
+      setConfirm({
+        title: "System Termination",
+        message: "End session and clear local workspace state?",
+        onConfirm: () => {
+          localStorage.removeItem("blonde-user");
+          dispatch(clearAllNodes());
+          setUser(null);
+          dispatch(setConfirm(null));
+        },
+      }),
+    );
 
   const handleClearWorkspace = () =>
-    setConfirmConfig({
-      title: "Clear Canvas",
-      message:
-        "Remove all nodes from the cloud and local canvas? Files remain in terminal.",
-      type: "danger",
-      onConfirm: async () => {
-        if (user?.id) {
-          try {
-            await axios.delete(`${API_BASE}/clear/${user.id}`);
+    dispatch(
+      setConfirm({
+        title: "Clear Canvas",
+        message:
+          "Remove all nodes from the cloud and local canvas? Files remain in terminal.",
+        type: "danger",
+        onConfirm: async () => {
+          if (user?.id) {
+            try {
+              await axios.delete(`${API_BASE}/clear/${user.id}`);
+              dispatch(clearAllNodes());
+            } catch (err) {
+              console.error("Failed to clear cloud workspace", err);
+            }
+          } else {
             dispatch(clearAllNodes());
-          } catch (err) {
-            console.error("Failed to clear cloud workspace", err);
           }
-        } else {
-          dispatch(clearAllNodes());
-        }
-        setConfirmConfig(null);
-      },
-    });
+          dispatch(setConfirm(null));
+        },
+      }),
+    );
 
   const handleMountRequest = useCallback(
     (files: any[]) => {
       if (nodes.length > 0) {
-        setConfirmConfig({
-          title: "Workspace Conflict",
-          message: "Clear canvas before mounting this project?",
-          onConfirm: () => {
-            dispatch(clearAllNodes());
-            syncFolder(files);
-            setConfirmConfig(null);
-          },
-          onCancel: () => {
-            syncFolder(files);
-            setConfirmConfig(null);
-          },
-        });
+        dispatch(
+          setConfirm({
+            title: "Workspace Conflict",
+            message: "Clear canvas before mounting this project?",
+            onConfirm: () => {
+              dispatch(clearAllNodes());
+              syncFolder(files);
+              dispatch(setConfirm(null));
+            },
+            onCancel: () => {
+              syncFolder(files);
+              dispatch(setConfirm(null));
+            },
+          }),
+        );
       } else {
         syncFolder(files);
       }
@@ -244,12 +252,19 @@ export default function App() {
   return (
     <div className="flex w-screen h-screen overflow-hidden bg-[var(--bg-main)] text-[var(--text-main)] font-mono">
       {showWelcome && <WelcomeModal onClose={() => setShowWelcome(false)} />}
+
       {confirmConfig && (
         <ConfirmModal
-          {...confirmConfig}
-          onCancel={confirmConfig.onCancel || (() => setConfirmConfig(null))}
+          title={confirmConfig.title}
+          message={confirmConfig.message}
+          type={confirmConfig.type === "info" ? "default" : confirmConfig.type}
+          onConfirm={confirmConfig.onConfirm}
+          onCancel={
+            confirmConfig.onCancel || (() => dispatch(setConfirm(null)))
+          }
         />
       )}
+
       {uploadStatus && <UploadProgressBar {...uploadStatus} />}
 
       <aside
@@ -310,7 +325,6 @@ export default function App() {
             </button>
           </header>
 
-          {/* Help button */}
           <button
             onClick={() => setShowWelcome(true)}
             className="absolute bottom-6 left-6 z-50 p-3 bg-[var(--bg-node)] border border-[var(--border-color)] rounded-full shadow-2xl hover:border-blue-500/50 transition-all"
@@ -318,7 +332,6 @@ export default function App() {
             <HelpIcon />
           </button>
 
-          {/* Trash nodes button */}
           <button
             onClick={handleClearWorkspace}
             className="absolute bottom-6 right-6 z-50 p-3 bg-[var(--bg-node)] border border-[var(--border-color)] rounded-full shadow-2xl hover:border-red-500/50 transition-all text-red-500 group"
@@ -343,9 +356,7 @@ export default function App() {
         </div>
 
         <section
-          className={`w-full border-t border-[var(--border-color)] bg-[#0d0d0d] transition-all ${
-            isTerminalOpen ? "h-72" : "h-0"
-          } overflow-hidden`}
+          className={`w-full border-t border-[var(--border-color)] bg-[#0d0d0d] transition-all ${isTerminalOpen ? "h-72" : "h-0"} overflow-hidden`}
         >
           <TerminalWindow />
         </section>

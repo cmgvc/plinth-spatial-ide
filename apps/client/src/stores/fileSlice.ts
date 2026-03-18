@@ -47,6 +47,9 @@ const fileSlice = createSlice({
     addNode: (state, action: PayloadAction<Node<FileNodeData>>) => {
       state.nodes.push(action.payload);
     },
+    removeNode: (state, action: PayloadAction<string>) => {
+      state.nodes = state.nodes.filter((node) => node.id !== action.payload);
+    },
     updateNodeStatus: (
       state,
       action: PayloadAction<{ id: string; status: FileNodeData['syncStatus'] }>
@@ -79,6 +82,7 @@ export const {
   edgesChanged,
   onConnect,
   addNode,
+  removeNode,
   updateNodeStatus,
   updateNodeCode,
   clearAllNodes,

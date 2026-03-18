@@ -1,5 +1,6 @@
 import { configureStore } from '@reduxjs/toolkit';
 import fileReducer from './fileSlice';
+import uiReducer from './uiSlice';
 
 declare global {
   interface Window {
@@ -11,6 +12,7 @@ declare global {
 export const store = configureStore({
   reducer: {
     files: fileReducer,
+    ui: uiReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

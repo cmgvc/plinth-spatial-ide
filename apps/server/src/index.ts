@@ -44,6 +44,7 @@ app.use(cors({
 app.use(express.json());
 app.use("/api/nodes", nodeRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/sync", syncRoutes);
 
 mongoose.connect(process.env.MONGODB_URI!)
   .then(() => {

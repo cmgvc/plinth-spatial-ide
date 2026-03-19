@@ -49,7 +49,7 @@ export function useTerminalSocket(userId?: string) {
       console.log("🧹 Cleaning up socket connection...");
       s.off("connect", onConnect);
       s.off("disconnect", onDisconnect);
-      s.disconnect(); 
+      s.disconnect();
       socketRef.current = null;
     };
   }, [userId]);

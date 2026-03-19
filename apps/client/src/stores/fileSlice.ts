@@ -35,6 +35,9 @@ const fileSlice = createSlice({
     setNodesInitial: (state, action: PayloadAction<Node<FileNodeData>[]>) => {
       state.nodes = action.payload;
     },
+    setEdgesInitial: (state, action: PayloadAction<Edge[]>) => {
+      state.edges = action.payload;
+    },
     nodesChanged: (state, action: PayloadAction<NodeChange[]>) => {
       state.nodes = applyNodeChanges(action.payload, state.nodes);
     },
@@ -78,6 +81,7 @@ const fileSlice = createSlice({
 
 export const {
   setNodesInitial,
+  setEdgesInitial,
   nodesChanged,
   edgesChanged,
   onConnect,

@@ -7,6 +7,7 @@ import { RootState } from "./stores";
 import {
   clearAllNodes,
   setNodesInitial,
+  setEdgesInitial,
   addNode,
   updateNodeStatus,
 } from "./stores/fileSlice";
@@ -29,12 +30,16 @@ import {
   HelpIcon,
 } from "./utils/icons";
 
-const ROOT_URL = import.meta.env.VITE_API_URL || "http://localhost:5001";
+// Use Render backend URL only in production; keep local dev on localhost.
+const ROOT_URL = import.meta.env.PROD
+  ? import.meta.env.VITE_API_URL || "http://localhost:5001"
+  : "http://localhost:5001";
 export const API_BASE = `${ROOT_URL}/api/nodes`;
 
 export default function App() {
   const dispatch = useDispatch();
   const nodes = useSelector((state: RootState) => state.files.nodes);
+  const edges = useSelector((state: RootState) => state.files.edges);
   const confirmConfig = useSelector(
     (state: RootState) => state.ui.confirmConfig,
   );
@@ -70,6 +75,29 @@ export default function App() {
     escape: () => dispatch(setConfirm(null)),
   });
 
+  const handleNodeSearch = useCallback(() => {
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) return;
+
+    const match = (nodes as any[]).find((n) => {
+      const filename = n?.data?.filename?.toLowerCase?.() ?? "";
+      const path = n?.data?.path?.toLowerCase?.() ?? "";
+      const nodeId = n?.id?.toString?.().toLowerCase?.() ?? "";
+      return (
+        filename.includes(q) ||
+        path.includes(q) ||
+        nodeId.includes(q)
+      );
+    });
+
+    if (!match) return;
+
+    // Center view roughly where the node label is (mirrors `handleFileSelect`).
+    const x = match.position?.x ?? 0;
+    const y = match.position?.y ?? 0;
+    setCenter(x + 250, y + 200, { zoom: 1.1, duration: 800 });
+  }, [nodes, searchQuery, setCenter]);
+
   useEffect(() => {
     const saved = localStorage.getItem("blonde-user");
     if (saved) setUser(JSON.parse(saved));
@@ -96,12 +124,16 @@ export default function App() {
       axios
         .get(`${API_BASE}/${user.id}`)
         .then(({ data }) => {
-          if (data && data.nodes && data.nodes.length > 0) {
-            const mappedNodes = data.nodes.map((n: any) => ({
+          if (data?.nodes) {
+            const mappedNodes = (data.nodes as any[]).map((n: any) => ({
               ...n,
-              id: n.nodeId,
+              // Backend expects nodes to have `nodeId`; older stored workspaces may only have `id`.
+              id: n.nodeId ?? n.id,
             }));
             dispatch(setNodesInitial(mappedNodes));
+          }
+          if (Array.isArray(data?.edges)) {
+            dispatch(setEdgesInitial(data.edges));
           }
         })
         .catch((err) => {
@@ -117,7 +149,23 @@ export default function App() {
     setSyncStatus("saving");
     const handler = setTimeout(async () => {
       try {
-        await axios.post(`${API_BASE}/sync/${user.id}`, { nodes });
+        // Backend move logic and frontend loaders both assume nodes carry `nodeId`.
+        const nodesForCloud = nodes.map((n: any) => ({
+          ...n,
+          nodeId: n.nodeId ?? n.id,
+          // `fileHandle` is a browser-only object; do not persist it.
+          data: n.data
+            ? {
+                ...n.data,
+                fileHandle: undefined,
+              }
+            : n.data,
+        }));
+
+        await axios.post(`${API_BASE}/sync/${user.id}`, {
+          nodes: nodesForCloud,
+          edges,
+        });
         setSyncStatus("synced");
       } catch (err) {
         setSyncStatus("error");
@@ -126,7 +174,38 @@ export default function App() {
     }, 2000);
 
     return () => clearTimeout(handler);
-  }, [nodes, user?.id]);
+  }, [nodes, edges, user?.id]);
+
+  // Extra safety: persist right before reload/navigation so the canvas
+  // comes back exactly as the user left it.
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const handleBeforeUnload = () => {
+      const nodesForCloud = nodes.map((n: any) => ({
+        ...n,
+        nodeId: n.nodeId ?? n.id,
+        data: n.data
+          ? {
+              ...n.data,
+              fileHandle: undefined,
+            }
+          : n.data,
+      }));
+
+      const url = `${API_BASE}/sync/${user.id}`;
+      // `keepalive` lets the browser attempt to finish the request on unload.
+      fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nodes: nodesForCloud, edges }),
+        keepalive: true,
+      }).catch(() => undefined);
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [user?.id, nodes, edges]);
 
   const handleLogout = () =>
     dispatch(
@@ -226,8 +305,8 @@ export default function App() {
       if (socket?.connected) {
         const base64 = btoa(unescape(encodeURIComponent(code)));
         socket.emit(
-          "terminal:input",
-          `mkdir -p "$(dirname "/home/workspace/${path}")" && echo "${base64}" | base64 -d > "/home/workspace/${path}"\n`,
+          "terminal-input",
+          `mkdir -p "$(dirname "/home/sandbox/${path}")" && echo "${base64}" | base64 -d > "/home/sandbox/${path}"\n`,
         );
         setTimeout(
           () => dispatch(updateNodeStatus({ id: nodeId, status: "synced" })),
@@ -316,6 +395,9 @@ export default function App() {
               className="bg-transparent outline-none text-[11px] w-32 focus:w-48 transition-all"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleNodeSearch();
+              }}
             />
 
             <div className="w-px h-4 bg-[var(--border-color)] mx-1" />
@@ -359,7 +441,7 @@ export default function App() {
         <section
           className={`w-full border-t border-[var(--border-color)] bg-[#0d0d0d] transition-all ${isTerminalOpen ? "h-72" : "h-0"} overflow-hidden`}
         >
-          <TerminalWindow />
+          <TerminalWindow socket={socket} />
         </section>
       </main>
     </div>

@@ -17,6 +17,6 @@
     "jsx": "react-jsx",
     "types": ["node", "vite/client", "@types/wicg-file-system-access"],
   },
-  "include": ["src", "../server/src/services/janitor.ts", "src/test"],
+  "include": ["src", "src/test"],
   "exclude": ["node_modules", "e2e"]
 }

@@ -1,0 +1,46 @@
+app = "plinth"
+primary_region = "yyz"
+
+[build]
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  
+  # KEEP ALIVE: Set this to false if you want the machine to stay up 
+  # for the full duration of your dev session.
+  auto_stop_machines = false 
+  auto_start_machines = true
+  min_machines_running = 1 
+  processes = ["app"]
+
+  [http_service.concurrency]
+    # We use 'connections' because 1 Terminal = 1 persistent WebSocket.
+    type = "connections"
+    hard_limit = 20
+    soft_limit = 15
+
+# --- WEBSOCKET OPTIMIZATION ---
+[[services]]
+  internal_port = 8080
+  protocol = "tcp"
+
+  [[services.ports]]
+    handlers = ["http"]
+    port = 80
+
+  [[services.ports]]
+    handlers = ["tls", "http"]
+    port = 443
+
+  # Crucial: This ensures the proxy doesn't kill the socket 
+  # if you don't type for a few minutes.
+  [services.concurrency]
+    type = "connections"
+    hard_limit = 20
+    soft_limit = 15
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 1024

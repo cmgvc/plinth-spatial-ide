@@ -30,7 +30,7 @@ import {
 } from "./utils/icons";
 
 const ROOT_URL = import.meta.env.VITE_API_URL || "http://localhost:5001";
-export const API_BASE = `${ROOT_URL}/api`;
+export const API_BASE = `${ROOT_URL}/api/nodes`;
 
 export default function App() {
   const dispatch = useDispatch();

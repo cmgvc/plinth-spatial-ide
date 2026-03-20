@@ -3,8 +3,9 @@ import { User } from "../models/User";
 
 const router = express.Router();
 
-// 1. LOGIN ROUTE
 router.post("/login", async (req, res) => {
+  console.log("Login attempt for:", req.body.email);
+
   try {
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: "Email is required" });
@@ -12,44 +13,46 @@ router.post("/login", async (req, res) => {
     let user = await User.findOne({ email });
 
     if (!user) {
-      // Create new user if they don't exist
+      console.log("Creating new user for:", email);
       user = new User({
         email,
         username: email.split("@")[0],
-        rootFolders: [], // Initialize the array
+        rootFolders: [],
       });
+
       await user.save();
+      console.log("New user saved successfully");
     }
 
-    // Return the data exactly as the frontend App.tsx expects it
     res.json({
       id: user._id.toString(),
       username: user.username,
       rootFolders: user.rootFolders || [],
     });
   } catch (err: any) {
-    console.error("CRITICAL AUTH ERROR:", err);
-    res.status(500).json({ error: "Login failed" });
+    console.error("AUTH ERROR:", err.message);
+    res.status(500).json({ error: "Login failed", details: err.message });
   }
 });
 
-// 2. SYNC FOLDERS ROUTE
-// FIXED: Added /:userId to the path to match your frontend API calls
 router.post("/sync-folders/:userId", async (req, res) => {
-  const { userId } = req.params; // Get ID from URL
+  const { userId } = req.params;
   const { folderName } = req.body;
 
-  if (!userId || !folderName) {
-    return res.status(400).json({ error: "Missing userId or folderName" });
-  }
+  if (!folderName)
+    return res.status(400).json({ error: "Folder name required" });
 
   try {
-    // A. Remove existing folder entry with same name to prevent duplicates
-    await User.findByIdAndUpdate(userId, {
-      $pull: { rootFolders: { name: folderName } } as any,
-    });
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      {
+        $pull: { rootFolders: { name: folderName } },
+      },
+      { new: true },
+    );
 
-    // B. Push the fresh folder metadata
+    if (!updatedUser) return res.status(404).json({ error: "User not found" });
+
     const finalUser = await User.findByIdAndUpdate(
       userId,
       {
@@ -57,21 +60,17 @@ router.post("/sync-folders/:userId", async (req, res) => {
           rootFolders: {
             name: folderName,
             path: folderName,
-            // Note: If you add 'lastSynced' here, ensure it's in your IUser interface!
+            lastSynced: new Date(),
           },
-        } as any,
+        },
       },
-      { new: true, runValidators: true },
+      { new: true },
     );
 
-    if (!finalUser) {
-      return res.status(404).json({ error: "User not found" });
-    }
-
-    res.status(200).json(finalUser.rootFolders);
+    res.status(200).json(finalUser?.rootFolders || []);
   } catch (err: any) {
-    console.error("SYNC ERROR:", err);
-    res.status(500).json({ error: "Failed to update folder list" });
+    console.error("SYNC ERROR:", err.message);
+    res.status(500).json({ error: "Failed to sync folder" });
   }
 });
 

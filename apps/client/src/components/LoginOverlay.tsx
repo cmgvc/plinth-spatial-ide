@@ -15,16 +15,14 @@ export default function LoginOverlay({
     setLoading(true);
     setStatus("AUTHENTICATING");
 
-    // Use Render backend URL only in production; keep local dev on localhost.
     const baseURL = import.meta.env.PROD
       ? import.meta.env.VITE_API_URL || "http://localhost:5001"
       : "http://localhost:5001";
 
     try {
-      const { data } = await axios.post(
-        `${baseURL}/api/users/login`,
-        { email },
-      );
+      const { data } = await axios.post(`${baseURL}/api/users/login`, {
+        email,
+      });
       setStatus("CONNECTED");
       setTimeout(() => onLogin(data), 600);
     } catch (err) {

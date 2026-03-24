@@ -1,25 +1,53 @@
 FROM node:20-bullseye
 
 RUN apt-get update && apt-get install -y \
-    python3 make g++ bash git curl procps \
+    python3 make g++ bash git curl procps vim nano \
     && rm -rf /var/lib/apt/lists/*
 
-RUN useradd -m -s /bin/bash sandbox
-RUN mkdir -p /home/sandbox/app /home/sandbox/workspace
+RUN userdel -r node || true && \
+    useradd -m -u 1000 -s /bin/bash sandbox
 
-RUN chown -R sandbox:sandbox /home/sandbox/app /home/sandbox/workspace
-
-USER sandbox
-WORKDIR /home/sandbox/app
-
-COPY --chown=sandbox:sandbox package*.json ./
+WORKDIR /app
+COPY package*.json ./
 RUN npm install
-COPY --chown=sandbox:sandbox . .
+COPY . .
 RUN npm run build
 
-ENV HOME=/home/sandbox/workspace
+RUN mkdir -p /home/sandbox/workspace /home/sandbox/system
+RUN echo "Welcome to the Plinth File System.\nYour workspace is in ~/workspace." > /home/sandbox/system/README.txt
+
+RUN chmod 711 /app
+RUN chmod -R 755 /app/dist
+RUN chown -R root:root /home/sandbox/system && chmod -R 755 /home/sandbox/system
+
+ENV HOME=/home/sandbox
 ENV TERM=xterm-256color
 ENV NODE_ENV=production
 EXPOSE 8080
 
+RUN echo 'export PS1="\[\033[01;34m\]PLINTH \[\033[00m\]> \[\033[01;32m\]\w\[\033[00m\] \$ "' >> /home/sandbox/.bashrc \
+    && echo 'alias ll="ls -la"' >> /home/sandbox/.bashrc \
+    && echo 'alias help="cat /home/sandbox/system/README.txt"' >> /home/sandbox/.bashrc \
+    && echo 'cd ~/workspace' >> /home/sandbox/.bashrc \
+    && echo 'echo -e "\n\033[1;37mWelcome to Plinth Runtime v1.0.4\033[0m"' >> /home/sandbox/.bashrc \
+    && echo 'echo -e "\033[0;90m----------------------------------------\033[0m"' >> /home/sandbox/.bashrc \
+    && echo 'cat /home/sandbox/system/README.txt' >> /home/sandbox/.bashrc \
+    && echo 'echo -e "\n\033[0;90m----------------------------------------\033[0m"' >> /home/sandbox/.bashrc \
+    && chown sandbox:sandbox /home/sandbox/.bashrc
+
+RUN printf '#!/bin/bash\n\
+echo "Plinth: Waiting for volume mount..."\n\
+sleep 2\n\
+echo "Plinth: Synchronizing Volume Permissions..."\n\
+chown -R sandbox:sandbox /home/sandbox/workspace\n\
+# 2775: SetGID bit ensures new files inherit the sandbox group\n\
+chmod -R 2775 /home/sandbox/workspace\n\
+echo "Plinth: Permissions secured. Starting Engine..."\n\
+exec "$@"' > /entrypoint.sh \
+    && chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
+
+USER root
+WORKDIR /app
 CMD ["npm", "run", "start:fly"]

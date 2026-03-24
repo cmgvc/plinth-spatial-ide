@@ -37,7 +37,7 @@ app.use("/api/users", userRoutes);
 
 io.on("connection", (socket) => {
   const userId = String(socket.handshake.query.userId ?? "unknown");
-  const terminalCwd = "/home/sandbox/workspace";
+  const terminalCwd = "/home/sandbox/workspace"; 
 
   console.log(`Terminal session started: ${userId}`);
 
@@ -49,24 +49,34 @@ io.on("connection", (socket) => {
       cols: 80,
       rows: 24,
       cwd: terminalCwd,
+      uid: 1000, 
+      gid: 1000,
       env: { 
         ...process.env, 
-        HOME: terminalCwd,
+        HOME: "/home/sandbox", 
         TERM: "xterm-256color",
-        USER: "sandbox" 
+        USER: "sandbox",
+        PATH: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        WORKSPACE: terminalCwd
       },
     });
 
-    setTimeout(() => {
-      ptyProcess.write("\n");
+    const startupTimeout = setTimeout(() => {
+      try {
+        ptyProcess.write("\n");
+      } catch (e) {
+        console.error("PTY Write Error during startup:", e);
+      }
     }, 500);
 
     ptyProcess.onData((data) => {
       socket.emit("terminal-output", data);
     });
 
-    socket.on("terminal-input", (data) => {
-      if (ptyProcess) ptyProcess.write(data);
+socket.on("terminal-input", (data) => {
+      if (ptyProcess) {
+        ptyProcess.write(data);
+      }
     });
 
     socket.on("terminal-resize", (size) => {
@@ -81,12 +91,17 @@ io.on("connection", (socket) => {
 
     socket.on("disconnect", () => {
       console.log(`🔌 Session Ended: ${userId}`);
-      ptyProcess.kill();
+      clearTimeout(startupTimeout);
+      try {
+        ptyProcess.kill();
+      } catch (e) {
+        // Process might already be dead
+      }
     });
 
   } catch (err) {
     console.error("PTY Spawn Error:", err);
-    socket.emit("terminal-output", "\r\n\x1b[31m[ERROR]: Failed to spawn shell process.\x1b[0m\r\n");
+    socket.emit("terminal-output", "\r\n\x1b[31m[ERROR]: Failed to spawn sandbox shell.\x1b[0m\r\n");
   }
 });
 

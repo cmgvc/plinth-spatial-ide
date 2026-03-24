@@ -1,49 +1,53 @@
-# 1. Using full Bullseye is the right move for C++ bindings (node-pty)
 FROM node:20-bullseye
 
-# 2. Add 'procps' and 'python3' for node-gyp (the C++ compiler)
 RUN apt-get update && apt-get install -y \
-    python3 \
-    make \
-    g++ \
-    bash \
-    git \
-    curl \
-    iproute2 \
-    procps \
+    python3 make g++ bash git curl procps vim nano \
     && rm -rf /var/lib/apt/lists/*
 
-# 3. Create the user with a specific shell
-RUN useradd -m -s /bin/bash sandbox
-WORKDIR /home/sandbox
+RUN userdel -r node || true && \
+    useradd -m -u 1000 -s /bin/bash sandbox
 
-# 4. Copy package files first to leverage Docker cache
+WORKDIR /app
 COPY package*.json ./
-
-# 5. Build native modules as root
-# 'npm install' will trigger 'node-gyp rebuild' for node-pty
 RUN npm install
-
-# 6. Copy the source code
 COPY . .
-
-# 7. Compile TypeScript to JavaScript
 RUN npm run build
 
-# 8. PERMISSIONS FIX:
-# Ensure the sandbox user owns the entire working directory
-# including the built /dist and /node_modules
-RUN chown -R sandbox:sandbox /home/sandbox
+RUN mkdir -p /home/sandbox/workspace /home/sandbox/system
+RUN echo "Welcome to the Plinth File System.\nYour workspace is in ~/workspace." > /home/sandbox/system/README.txt
 
-# 9. Set the environment for the Terminal
-USER sandbox
+RUN chmod 711 /app
+RUN chmod -R 755 /app/dist
+RUN chown -R root:root /home/sandbox/system && chmod -R 755 /home/sandbox/system
+
 ENV HOME=/home/sandbox
 ENV TERM=xterm-256color
 ENV NODE_ENV=production
-
-# 10. Start the process
 EXPOSE 8080
 
-# We use 'npm run' but ensure your package.json 'start:fly' 
-# points to the compiled JS (e.g., node dist/index.js)
+RUN echo 'export PS1="\[\033[01;34m\]PLINTH \[\033[00m\]> \[\033[01;32m\]\w\[\033[00m\] \$ "' >> /home/sandbox/.bashrc \
+    && echo 'alias ll="ls -la"' >> /home/sandbox/.bashrc \
+    && echo 'alias help="cat /home/sandbox/system/README.txt"' >> /home/sandbox/.bashrc \
+    && echo 'cd ~/workspace' >> /home/sandbox/.bashrc \
+    && echo 'echo -e "\n\033[1;37mWelcome to Plinth Runtime v1.0.4\033[0m"' >> /home/sandbox/.bashrc \
+    && echo 'echo -e "\033[0;90m----------------------------------------\033[0m"' >> /home/sandbox/.bashrc \
+    && echo 'cat /home/sandbox/system/README.txt' >> /home/sandbox/.bashrc \
+    && echo 'echo -e "\n\033[0;90m----------------------------------------\033[0m"' >> /home/sandbox/.bashrc \
+    && chown sandbox:sandbox /home/sandbox/.bashrc
+
+RUN printf '#!/bin/bash\n\
+echo "Plinth: Waiting for volume mount..."\n\
+sleep 2\n\
+echo "Plinth: Synchronizing Volume Permissions..."\n\
+chown -R sandbox:sandbox /home/sandbox/workspace\n\
+# 2775: SetGID bit ensures new files inherit the sandbox group\n\
+chmod -R 2775 /home/sandbox/workspace\n\
+echo "Plinth: Permissions secured. Starting Engine..."\n\
+exec "$@"' > /entrypoint.sh \
+    && chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
+
+USER root
+WORKDIR /app
 CMD ["npm", "run", "start:fly"]

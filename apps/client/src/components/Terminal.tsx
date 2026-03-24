@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { Terminal } from "xterm";
 import { FitAddon } from "xterm-addon-fit";
 import { Socket } from "socket.io-client";
@@ -12,80 +12,97 @@ export default function TerminalWindow({ socket }: { socket: Socket | null }) {
   useEffect(() => {
     if (!terminalRef.current || !socket) return;
 
-    // 1. Initialize Terminal & Addon
     const term = new Terminal({
       cursorBlink: true,
-      theme: { 
+      theme: {
         background: "#0d0d0d",
         foreground: "#cccccc",
-        cursor: "#555555"
+        cursor: "#555555",
       },
       fontFamily: '"Cascadia Code", Menlo, monospace',
       fontSize: 13,
-      allowProposedApi: true
+      allowProposedApi: true,
+      convertEol: true,
     });
 
     const fitAddon = new FitAddon();
     term.loadAddon(fitAddon);
-    
+
     term.open(terminalRef.current);
-    
-    // Store refs for access in observers/socket listeners
+
     termInstance.current = term;
     fitAddonRef.current = fitAddon;
 
-    // 2. The Robust Resize Logic
-    // ResizeObserver ensures we only fit() when the element actually has dimensions
-    const resizeObserver = new ResizeObserver(() => {
-      if (terminalRef.current && terminalRef.current.offsetWidth > 0) {
-        try {
-          // Wrap in a microtask to ensure xterm has finished internal setup
-          Promise.resolve().then(() => {
-            fitAddon.fit();
-            if (socket.connected) {
-              socket.emit("terminal-resize", { 
-                cols: term.cols, 
-                rows: term.rows 
-              });
-            }
-          });
-        } catch (e) {
-          console.warn("xterm fit prevented during container transition");
-        }
-      }
-    });
+    const handleResize = () => {
+      if (
+        !terminalRef.current ||
+        terminalRef.current.offsetWidth === 0 ||
+        terminalRef.current.offsetHeight === 0
+      )
+        return;
 
+      try {
+        fitAddon.fit();
+        if (socket.connected) {
+          socket.emit("terminal-resize", { cols: term.cols, rows: term.rows });
+        }
+      } catch (e) {
+        console.warn("Terminal fit failed:", e);
+      }
+    };
+
+    const resizeObserver = new ResizeObserver(() => {
+      requestAnimationFrame(handleResize);
+    });
     resizeObserver.observe(terminalRef.current);
 
-    // 3. Socket Event Management
-    const handleOutput = (data: string) => term.write(data);
-    
+    const handleOutput = (data: string) => {
+      term.write(data);
+    };
+
+    const handleConnect = () => {
+      term.write(
+        "\r\n\x1b[32m[SYSTEM]: Terminal Engine Link Established...\x1b[0m\r\n",
+      );
+      setTimeout(handleResize, 50);
+      socket.emit("terminal-input", "\n");
+    };
+
     socket.on("terminal-output", handleOutput);
-    
-    const dataListener = term.onData(data => {
+    socket.on("connect", handleConnect);
+
+    if (socket.connected) {
+      handleConnect();
+    }
+
+    const dataListener = term.onData((data) => {
       if (socket.connected) {
         socket.emit("terminal-input", data);
       }
     });
 
-    // Ensure socket connects/reconnects
-    if (!socket.connected) {
-      socket.connect();
-    }
+    const initTimer = setTimeout(() => {
+      handleResize();
+      term.focus();
+    }, 150);
 
-    // 4. Cleanup
     return () => {
+      clearTimeout(initTimer);
       resizeObserver.disconnect();
       dataListener.dispose();
       socket.off("terminal-output", handleOutput);
+      socket.off("connect", handleConnect);
       term.dispose();
       termInstance.current = null;
     };
   }, [socket]);
 
   return (
-    <div className="h-full w-full bg-[#0d0d0d] overflow-hidden p-2">
-      <div ref={terminalRef} className="h-full w-full" />
+    <div
+      className="h-full w-full bg-[#0d0d0d] overflow-hidden p-2 flex flex-col"
+      onClick={() => termInstance.current?.focus()}
+    >
+      <div ref={terminalRef} className="flex-1 w-full min-h-0" />
     </div>
   );
 }

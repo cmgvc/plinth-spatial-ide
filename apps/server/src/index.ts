@@ -1,62 +1,122 @@
-import "dotenv/config"; 
+import "dotenv/config";
 import express from "express";
 import mongoose from "mongoose";
 import cors from "cors";
 import http from "http";
-import { rateLimit } from "express-rate-limit"; 
+import { Server } from "socket.io";
+import * as pty from "node-pty";
+
 import nodeRoutes from "./routes/nodeRoutes";
-import flyRoutes from "./routes/flyRoutes"; // Added this
+import flyRoutes from "./routes/flyRoutes";
 import userRoutes from "./routes/userRoutes";
 
-console.log("--- 🌍 REBOOTING BRAIN ---");
 const app = express();
 const server = http.createServer(app);
 
-// Infrastructure & Proxy settings
+const io = new Server(server, {
+  cors: {
+    origin: ["https://cmgvc.github.io", "http://localhost:5173", "http://127.0.0.1:5173"],
+    credentials: true,
+  },
+  transports: ["websocket"], 
+});
+
 app.set("trust proxy", 1); 
-const PORT = process.env.PORT || 5001;
-
-// Rate Limiters
-const generalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, 
-  limit: 500, // Relaxed for dev
-  standardHeaders: "draft-7",
-  legacyHeaders: false,
-});
-
-const spawnLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, 
-  limit: 50, 
-  message: { error: "Spawn limit reached. Try again later." },
-});
-
-// Middleware
 app.use(cors({
   origin: ["https://cmgvc.github.io", "http://localhost:5173", "http://127.0.0.1:5173"],
-  methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"], // Added PATCH
   credentials: true,
 }));
 app.use(express.json());
-app.use(generalLimiter);
-
-// --- 6. ROUTES ---
-// Mount Fly.io infrastructure routes
-app.use("/api/fly", spawnLimiter, flyRoutes); 
-
-// Mount MongoDB node/canvas routes
-app.use("/api/nodes", nodeRoutes);
-
-// Mount User profile routes
-app.use("/api/users", userRoutes);
-
-// 7. DATABASE CONNECTION
-mongoose
-  .connect(process.env.MONGODB_URI!)
-  .then(() => console.log("🧠 Brain: Connected to MongoDB"))
-  .catch((err) => console.error("❌ MongoDB Error:", err.message));
 
 app.get("/health", (req, res) => res.status(200).send("OK"));
 
-server.listen(Number(PORT), "0.0.0.0", () => {
-  console.log(`🚀 Brain active on port ${PORT}`);
+app.use("/api/fly", flyRoutes); 
+app.use("/api/nodes", nodeRoutes);
+app.use("/api/users", userRoutes);
+
+io.on("connection", (socket) => {
+  const terminalCwd = "/home/sandbox/workspace"; 
+
+
+  const userId = String(socket.handshake.query.userId ?? "unknown");
+const machineId = String(socket.handshake.query.machineId ?? "");
+console.log(`🚀 Connecting ${userId} to Machine ${machineId}`);
+  const shell = "fly";
+const args = [
+  "ssh", 
+  "console", 
+  "-m", String(machineId), 
+  "-C", "/bin/bash --login"
+];
+  try {
+    const ptyProcess = pty.spawn(shell, args, {
+      name: "xterm-256color",
+      cols: 80,
+      rows: 24,
+      env: { 
+        ...process.env, 
+        HOME: "/home/sandbox", 
+        TERM: "xterm-256color",
+        USER: "sandbox",
+        PATH: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        WORKSPACE: terminalCwd,
+        FLY_API_TOKEN: process.env.FLY_API_TOKEN
+      },
+    });
+
+    const startupTimeout = setTimeout(() => {
+      try {
+        ptyProcess.write("\n");
+      } catch (e) {
+        console.error("PTY Write Error during startup:", e);
+      }
+    }, 500);
+
+ptyProcess.onData((data) => {
+  const shortId = userId.substring(0, 5);
+  console.log(`[PTY -> ${shortId}]: ${data.length} bytes`);
+  socket.emit("terminal-output", data);
+
 });
+
+socket.on("terminal-input", (data) => {
+      if (ptyProcess) {
+        ptyProcess.write(data);
+      }
+    });
+
+    socket.on("terminal-resize", (size) => {
+      if (ptyProcess && size.cols > 0 && size.rows > 0) {
+        try {
+          ptyProcess.resize(size.cols, size.rows);
+        } catch (e) {
+          console.error("PTY Resize Error:", e);
+        }
+      }
+    });
+
+    socket.on("disconnect", () => {
+      console.log(`🔌 Session Ended: ${userId}`);
+      clearTimeout(startupTimeout);
+      try {
+        ptyProcess.kill();
+      } catch (e) {
+      }
+    });
+
+  } catch (err) {
+    console.error("PTY Spawn Error:", err);
+    socket.emit("terminal-output", "\r\n\x1b[31m[ERROR]: Failed to spawn sandbox shell.\x1b[0m\r\n");
+  }
+});
+
+const PORT = process.env.PORT || 8080;
+mongoose
+  .connect(process.env.MONGODB_URI!)
+  .then(() => {
+    console.log("Connected to MongoDB");
+    server.listen(Number(PORT), "0.0.0.0", () => {
+      console.log(`Unified Backend active on port ${PORT}`);
+    });
+  })
+  .catch((err) => console.error("MongoDB Error:", err.message));

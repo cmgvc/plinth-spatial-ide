@@ -1,49 +1,25 @@
-# 1. Using full Bullseye is the right move for C++ bindings (node-pty)
 FROM node:20-bullseye
 
-# 2. Add 'procps' and 'python3' for node-gyp (the C++ compiler)
 RUN apt-get update && apt-get install -y \
-    python3 \
-    make \
-    g++ \
-    bash \
-    git \
-    curl \
-    iproute2 \
-    procps \
+    python3 make g++ bash git curl procps \
     && rm -rf /var/lib/apt/lists/*
 
-# 3. Create the user with a specific shell
 RUN useradd -m -s /bin/bash sandbox
-WORKDIR /home/sandbox
+RUN mkdir -p /home/sandbox/app /home/sandbox/workspace
 
-# 4. Copy package files first to leverage Docker cache
-COPY package*.json ./
+RUN chown -R sandbox:sandbox /home/sandbox/app /home/sandbox/workspace
 
-# 5. Build native modules as root
-# 'npm install' will trigger 'node-gyp rebuild' for node-pty
+USER sandbox
+WORKDIR /home/sandbox/app
+
+COPY --chown=sandbox:sandbox package*.json ./
 RUN npm install
-
-# 6. Copy the source code
-COPY . .
-
-# 7. Compile TypeScript to JavaScript
+COPY --chown=sandbox:sandbox . .
 RUN npm run build
 
-# 8. PERMISSIONS FIX:
-# Ensure the sandbox user owns the entire working directory
-# including the built /dist and /node_modules
-RUN chown -R sandbox:sandbox /home/sandbox
-
-# 9. Set the environment for the Terminal
-USER sandbox
-ENV HOME=/home/sandbox
+ENV HOME=/home/sandbox/workspace
 ENV TERM=xterm-256color
 ENV NODE_ENV=production
-
-# 10. Start the process
 EXPOSE 8080
 
-# We use 'npm run' but ensure your package.json 'start:fly' 
-# points to the compiled JS (e.g., node dist/index.js)
 CMD ["npm", "run", "start:fly"]

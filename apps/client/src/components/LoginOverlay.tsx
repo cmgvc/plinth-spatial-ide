@@ -16,16 +16,27 @@ export default function LoginOverlay({
     setStatus("AUTHENTICATING");
 
     const baseURL = import.meta.env.PROD
-      ? import.meta.env.VITE_API_URL || "http://localhost:5001"
+      ? "https://plinth.fly.dev"
       : "http://localhost:5001";
 
     try {
       const { data } = await axios.post(`${baseURL}/api/users/login`, {
-        email,
+        email: email.toLowerCase().trim(),
       });
+
+      console.log("🔑 Auth Success. Payload:", data);
+
+      if (!data.flyMachineId) {
+        console.warn("⚠️ Warning: flyMachineId missing from server response!");
+      }
+
       setStatus("CONNECTED");
-      setTimeout(() => onLogin(data), 600);
-    } catch (err) {
+
+      setTimeout(() => {
+        onLogin(data);
+      }, 800);
+    } catch (err: any) {
+      console.error("❌ Login Failed:", err.response?.data || err.message);
       setStatus("ERROR");
       setLoading(false);
       setTimeout(() => setStatus("READY"), 2000);
@@ -54,7 +65,9 @@ export default function LoginOverlay({
                   EMAIL
                 </label>
                 <span
-                  className={`text-[9px] font-mono transition-colors duration-300 ${status === "ERROR" ? "text-red-400" : "text-gray-600"}`}
+                  className={`text-[9px] font-mono transition-colors duration-300 ${
+                    status === "ERROR" ? "text-red-400" : "text-gray-600"
+                  }`}
                 >
                   {status}
                 </span>

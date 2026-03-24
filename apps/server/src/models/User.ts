@@ -4,6 +4,7 @@ export interface IUser extends Document {
   username: string;
   email: string;
   flyMachineId: string | null;
+  flyVolumeId: string | null; 
   nodes: any[];
   edges: any[];
   workspaceSettings: {
@@ -30,6 +31,7 @@ const userSchema = new Schema<IUser>(
       trim: true,
     },
     flyMachineId: { type: String, default: null },
+    flyVolumeId: { type: String, default: null }, 
     nodes: { type: [Schema.Types.Mixed] as any, default: [] },
     edges: { type: [Schema.Types.Mixed] as any, default: [] },
     workspaceSettings: {

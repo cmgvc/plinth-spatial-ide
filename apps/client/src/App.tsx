@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
-import { useReactFlow, ReactFlow, Background, Controls } from "reactflow";
+import { useReactFlow} from "reactflow";
 import { useDispatch, useSelector } from "react-redux";
 import { v4 as uuidv4 } from "uuid";
 import axios from "axios";
@@ -30,11 +30,12 @@ import {
   HelpIcon,
 } from "./utils/icons";
 
-// Use Render backend URL only in production; keep local dev on localhost.
 const ROOT_URL = import.meta.env.PROD
-  ? import.meta.env.VITE_API_URL || "http://localhost:5001"
+  ? "https://plinth.fly.dev"
   : "http://localhost:5001";
-export const API_BASE = `${ROOT_URL}/api/nodes`;
+
+export const API_BASE = `${ROOT_URL}/api/users`;
+export const NODE_API = `${ROOT_URL}/api/nodes`;
 
 export default function App() {
   const dispatch = useDispatch();
@@ -55,9 +56,9 @@ export default function App() {
   const [syncStatus, setSyncStatus] = useState<
     "idle" | "saving" | "synced" | "error"
   >("synced");
-
   const { isTerminalOpen, toggleTerminal, socket } = useTerminalSocket(
     user?.id,
+    user?.flyMachineId,
   );
   const { syncFolder, uploadStatus } = useWorkspaceSync(
     user,
@@ -75,39 +76,23 @@ export default function App() {
     escape: () => dispatch(setConfirm(null)),
   });
 
-  const handleNodeSearch = useCallback(() => {
-    const q = searchQuery.toLowerCase().trim();
-    if (!q) return;
-
-    const match = (nodes as any[]).find((n) => {
-      const filename = n?.data?.filename?.toLowerCase?.() ?? "";
-      const path = n?.data?.path?.toLowerCase?.() ?? "";
-      const nodeId = n?.id?.toString?.().toLowerCase?.() ?? "";
-      return (
-        filename.includes(q) ||
-        path.includes(q) ||
-        nodeId.includes(q)
-      );
-    });
-
-    if (!match) return;
-
-    // Center view roughly where the node label is (mirrors `handleFileSelect`).
-    const x = match.position?.x ?? 0;
-    const y = match.position?.y ?? 0;
-    setCenter(x + 250, y + 200, { zoom: 1.1, duration: 800 });
-  }, [nodes, searchQuery, setCenter]);
-
+  // Check for persisted session
   useEffect(() => {
     const saved = localStorage.getItem("blonde-user");
-    if (saved) setUser(JSON.parse(saved));
+    if (saved) {
+      const parsedUser = JSON.parse(saved);
+      setUser(parsedUser);
+      console.log("♻️ Session Restored:", parsedUser.flyMachineId);
+    }
   }, []);
 
+  // Theme sync
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
     localStorage.setItem("app-theme", theme);
   }, [theme]);
 
+  // Socket connectivity listener
   useEffect(() => {
     if (!socket) return;
     const check = () => setIsConnected(socket.connected);
@@ -119,15 +104,15 @@ export default function App() {
     };
   }, [socket]);
 
+  // Initial fetch for user's saved workspace
   useEffect(() => {
     if (user?.id) {
       axios
-        .get(`${API_BASE}/${user.id}`)
+        .get(`${NODE_API}/${user.id}`)
         .then(({ data }) => {
           if (data?.nodes) {
             const mappedNodes = (data.nodes as any[]).map((n: any) => ({
               ...n,
-              // Backend expects nodes to have `nodeId`; older stored workspaces may only have `id`.
               id: n.nodeId ?? n.id,
             }));
             dispatch(setNodesInitial(mappedNodes));
@@ -144,25 +129,19 @@ export default function App() {
     }
   }, [user?.id, dispatch]);
 
+  // Auto-save
   useEffect(() => {
     if (!user?.id) return;
     setSyncStatus("saving");
     const handler = setTimeout(async () => {
       try {
-        // Backend move logic and frontend loaders both assume nodes carry `nodeId`.
         const nodesForCloud = nodes.map((n: any) => ({
           ...n,
           nodeId: n.nodeId ?? n.id,
-          // `fileHandle` is a browser-only object; do not persist it.
-          data: n.data
-            ? {
-                ...n.data,
-                fileHandle: undefined,
-              }
-            : n.data,
+          data: { ...n.data, fileHandle: undefined },
         }));
 
-        await axios.post(`${API_BASE}/sync/${user.id}`, {
+        await axios.post(`${NODE_API}/sync/${user.id}`, {
           nodes: nodesForCloud,
           edges,
         });
@@ -175,37 +154,6 @@ export default function App() {
 
     return () => clearTimeout(handler);
   }, [nodes, edges, user?.id]);
-
-  // Extra safety: persist right before reload/navigation so the canvas
-  // comes back exactly as the user left it.
-  useEffect(() => {
-    if (!user?.id) return;
-
-    const handleBeforeUnload = () => {
-      const nodesForCloud = nodes.map((n: any) => ({
-        ...n,
-        nodeId: n.nodeId ?? n.id,
-        data: n.data
-          ? {
-              ...n.data,
-              fileHandle: undefined,
-            }
-          : n.data,
-      }));
-
-      const url = `${API_BASE}/sync/${user.id}`;
-      // `keepalive` lets the browser attempt to finish the request on unload.
-      fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nodes: nodesForCloud, edges }),
-        keepalive: true,
-      }).catch(() => undefined);
-    };
-
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [user?.id, nodes, edges]);
 
   const handleLogout = () =>
     dispatch(
@@ -225,13 +173,12 @@ export default function App() {
     dispatch(
       setConfirm({
         title: "Clear Canvas",
-        message:
-          "Remove all nodes from the cloud and local canvas? Files remain in terminal.",
+        message: "Remove all nodes from cloud? Files remain in terminal.",
         type: "danger",
         onConfirm: async () => {
           if (user?.id) {
             try {
-              await axios.delete(`${API_BASE}/clear/${user.id}`);
+              await axios.delete(`${NODE_API}/clear/${user.id}`);
               dispatch(clearAllNodes());
             } catch (err) {
               console.error("Failed to clear cloud workspace", err);
@@ -243,31 +190,6 @@ export default function App() {
         },
       }),
     );
-
-  const handleMountRequest = useCallback(
-    (files: any[]) => {
-      if (nodes.length > 0) {
-        dispatch(
-          setConfirm({
-            title: "Workspace Conflict",
-            message: "Clear canvas before mounting this project?",
-            onConfirm: () => {
-              dispatch(clearAllNodes());
-              syncFolder(files);
-              dispatch(setConfirm(null));
-            },
-            onCancel: () => {
-              syncFolder(files);
-              dispatch(setConfirm(null));
-            },
-          }),
-        );
-      } else {
-        syncFolder(files);
-      }
-    },
-    [nodes.length, dispatch, syncFolder],
-  );
 
   const handleFileSelect = useCallback(
     async (fileHandle: any, path: string) => {
@@ -354,7 +276,7 @@ export default function App() {
         <div className="w-[280px] h-full overflow-hidden">
           <Sidebar
             onFileSelect={handleFileSelect}
-            onFolderUpload={handleMountRequest}
+            onFolderUpload={(files) => syncFolder(files)}
             onClear={handleClearWorkspace}
             onLogout={handleLogout}
             username={user.username}
@@ -367,7 +289,6 @@ export default function App() {
       <main className="flex-1 flex flex-col relative min-w-0">
         <div className="flex-1 relative">
           <Canvas theme={theme} />
-
           <header
             className="fixed top-4 z-50 flex items-center gap-2 px-3 py-2 bg-[var(--bg-node)]/80 backdrop-blur-md border border-[var(--border-color)] rounded-lg shadow-xl"
             style={{ left: isSidebarOpen ? "296px" : "16px" }}
@@ -376,7 +297,6 @@ export default function App() {
               <SidebarIcon />
             </button>
             <div className="w-px h-4 bg-[var(--border-color)] mx-1" />
-
             <div
               className={`w-2 h-2 rounded-full mr-1 ${
                 syncStatus === "synced"
@@ -385,9 +305,7 @@ export default function App() {
                     ? "bg-yellow-500 animate-pulse"
                     : "bg-red-500"
               }`}
-              title={syncStatus}
             />
-
             <SearchIcon />
             <input
               id="node-search"
@@ -395,12 +313,7 @@ export default function App() {
               className="bg-transparent outline-none text-[11px] w-32 focus:w-48 transition-all"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleNodeSearch();
-              }}
             />
-
-            <div className="w-px h-4 bg-[var(--border-color)] mx-1" />
             <button
               onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
             >
@@ -410,36 +323,17 @@ export default function App() {
 
           <button
             onClick={() => setShowWelcome(true)}
-            className="absolute bottom-6 left-6 z-50 p-3 bg-[var(--bg-node)] border border-[var(--border-color)] rounded-full shadow-2xl hover:border-blue-500/50 transition-all"
+            className="absolute bottom-6 left-6 z-50 p-3 bg-[var(--bg-node)] border border-[var(--border-color)] rounded-full shadow-2xl"
           >
             <HelpIcon />
           </button>
-
-          <button
-            onClick={handleClearWorkspace}
-            className="absolute bottom-6 right-6 z-50 p-3 bg-[var(--bg-node)] border border-[var(--border-color)] rounded-full shadow-2xl hover:border-red-500/50 transition-all text-red-500 group"
-            title="Clear Workspace"
-          >
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="group-hover:scale-110 transition-transform"
-            >
-              <path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-              <line x1="10" y1="11" x2="10" y2="17" />
-              <line x1="14" y1="11" x2="14" y2="17" />
-            </svg>
-          </button>
         </div>
 
+        {/* Terminal */}
         <section
-          className={`w-full border-t border-[var(--border-color)] bg-[#0d0d0d] transition-all ${isTerminalOpen ? "h-72" : "h-0"} overflow-hidden`}
+          className={`w-full border-t border-[var(--border-color)] bg-[#0d0d0d] transition-all ${
+            isTerminalOpen ? "h-72" : "h-0"
+          } overflow-hidden`}
         >
           <TerminalWindow socket={socket} />
         </section>

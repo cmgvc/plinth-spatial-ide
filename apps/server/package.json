@@ -5,9 +5,8 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
-    "start:fly": "node dist/server.js",
-    "dev:render": "ts-node-dev --respawn src/index.ts",
-    "dev:fly": "ts-node-dev --respawn src/server.ts",
+    "start:fly": "node dist/index.js", 
+    "dev": "ts-node-dev --respawn src/index.ts",
     "docker:build": "docker build -t plinth-sandbox-node ."
   },
   "dependencies": {

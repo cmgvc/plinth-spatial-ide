@@ -1,63 +1,50 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { getSocket } from "../services/socket";
 import { Socket } from "socket.io-client";
 
-export function useTerminalSocket(userId?: string) {
+export function useTerminalSocket(userId?: string, machineId?: string) {
   const [isTerminalOpen, setIsTerminalOpen] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
-  
-  const socketRef = useRef<Socket | null>(null);
+  const [socket, setSocket] = useState<Socket | null>(null);
 
   const toggleTerminal = useCallback(() => {
-    setIsTerminalOpen((prev) => {
-      const nextState = !prev;
-      if (nextState) {
-        setTimeout(() => {
-          const textarea = document.querySelector(".xterm-helper-textarea") as HTMLTextAreaElement;
-          textarea?.focus();
-        }, 300);
-      }
-      return nextState;
-    });
+    setIsTerminalOpen((prev) => !prev);
   }, []);
 
   useEffect(() => {
-    if (!userId) {
-      setIsConnected(false);
-      return;
-    }
+    console.log("Hook sync: ", { userId, machineId });
+    if (!userId || !machineId || userId === "undefined") return;
 
-    const s = getSocket(userId);
-    socketRef.current = s;
+    const s = getSocket(userId, machineId);
+    if (!s) return;
+
+    setSocket(s);
 
     const onConnect = () => {
-      console.log(`✅ Socket connected to Sandbox: ${userId}`);
+      console.log("⚡ Hook detected connection");
       setIsConnected(true);
     };
-
-    const onDisconnect = () => {
-      console.log("Socket disconnected from Backend");
-      setIsConnected(false);
-    };
+    const onDisconnect = () => setIsConnected(false);
 
     s.on("connect", onConnect);
     s.on("disconnect", onDisconnect);
 
-    if (s.connected) setIsConnected(true);
+    if (!s.connected) {
+      s.connect();
+    } else {
+      setIsConnected(true);
+    }
 
     return () => {
-      console.log("🧹 Cleaning up socket connection...");
       s.off("connect", onConnect);
       s.off("disconnect", onDisconnect);
-      s.disconnect();
-      socketRef.current = null;
     };
-  }, [userId]);
+  }, [userId, machineId]);
 
-  return { 
-    isTerminalOpen, 
-    toggleTerminal, 
-    socket: socketRef.current,
-    isConnected
+  return {
+    isTerminalOpen,
+    toggleTerminal,
+    socket,
+    isConnected,
   };
 }

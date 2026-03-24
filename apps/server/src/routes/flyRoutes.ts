@@ -1,6 +1,6 @@
 import express from "express";
 import axios from "axios";
-import Node from "../models/Node";
+import { User } from "../models/User";
 
 const router = express.Router();
 
@@ -12,49 +12,115 @@ const flyApi = axios.create({
   },
 });
 
-/**
- * SPAWN / WAKE ENGINE
- * POST /api/fly/spawn/:userId
- */
+async function getOrCreateVolume(
+  userId: string,
+  existingVolumeId?: string | null,
+) {
+  if (existingVolumeId) return existingVolumeId;
+
+  const volName = `vol_${userId.substring(0, 10).toLowerCase()}`;
+
+  try {
+    const { data: volumes } = await flyApi.get(`/volumes`);
+    const existing = volumes.find((v: any) => v.name === volName);
+    if (existing) return existing.id;
+
+    console.log(`Creating new persistent volume: ${volName}`);
+    const { data: newVol } = await flyApi.post(`/volumes`, {
+      name: volName,
+      region: "yyz",
+      size_gb: 1,
+    });
+
+    return newVol.id;
+  } catch (err: any) {
+    console.error("Volume Lifecycle Error:", err.response?.data || err.message);
+    return null;
+  }
+}
+
 router.post("/spawn/:userId", async (req, res) => {
   const { userId } = req.params;
 
   try {
-    let workspace = await Node.findOne({ userId });
-    let machineId = workspace?.flyMachineId;
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
 
-    // 1. If we have a stored ID, check/start it
+    let machineId = user.flyMachineId;
+
     if (machineId) {
       try {
         const { data: m } = await flyApi.get(`/machines/${machineId}`);
-        if (m.state === "started") return res.json({ status: "ready", machineId });
-        
+
+        if (m.state === "started") {
+          return res.json({ status: "ready", machineId });
+        }
+
+        console.log(`Waking up machine: ${machineId}`);
         await flyApi.post(`/machines/${machineId}/start`);
         return res.json({ status: "starting", machineId });
       } catch (err: any) {
-        if (err.response?.status === 404) machineId = null; // ID is stale
-        else throw err;
+        if (err.response?.status === 404) {
+          console.log("Stale Machine ID detected. Rebuilding...");
+          machineId = null;
+        } else {
+          throw err;
+        }
       }
     }
 
-    // 2. If no ID (or stale), create a new Machine
+    const volumeId = await getOrCreateVolume(userId, user.flyVolumeId);
+    if (!volumeId) {
+      throw new Error("Could not initialize persistent storage.");
+    }
+
+    console.log(`Spawning fresh sandbox for user: ${userId}`);
     const flyResponse = await flyApi.post("/machines", {
       config: {
-        image: `registry.fly.io/${process.env.FLY_APP_NAME}:latest`,
-        guest: { cpu_kind: "shared", cpus: 1, memory_mb: 256 },
-        env: { USER_ID: userId },
-        metadata: { owner: userId }
+        image: `registry.io/${process.env.FLY_APP_NAME}:latest`,
+        guest: { cpu_kind: "shared", cpus: 1, memory_mb: 1024 },
+        user: "sandbox",
+        init: {
+          exec: ["/bin/bash", "--login"],
+          tty: true,
+        },
+        mounts: [
+          {
+            volume: volumeId,
+            path: "/home/sandbox/workspace",
+          },
+        ],
+        env: {
+          USER_ID: userId,
+          HOME: "/home/sandbox/workspace",
+          TERM: "xterm-256color",
+          LANG: "en_US.UTF-8",
+          NODE_ENV: "production",
+        },
+        metadata: {
+          owner_id: userId,
+          type: "persistent-sandbox",
+        },
       },
     });
 
     const newId = flyResponse.data.id;
-    await Node.findOneAndUpdate({ userId }, { flyMachineId: newId }, { upsert: true });
-    
-    res.json({ status: "created", machineId: newId });
 
-  } catch (err) {
-    console.error("Fly Engine Error:", err);
-    res.status(500).json({ error: "Infrastructure ignition failed." });
+    await User.findByIdAndUpdate(userId, {
+      flyMachineId: newId,
+      flyVolumeId: volumeId,
+    });
+
+    res.json({ status: "created", machineId: newId });
+  } catch (err: any) {
+    console.error(
+      "Fly Engine Critical Failure:",
+      err.response?.data || err.message,
+    );
+    res.status(500).json({
+      error: "Infrastructure ignition failed.",
+      details: err.response?.data?.error || "Check server logs",
+    });
   }
 });
 

@@ -1,9 +1,12 @@
-import "dotenv/config"; 
+import "dotenv/config";
 import express from "express";
 import mongoose from "mongoose";
 import cors from "cors";
 import http from "http";
-import { rateLimit } from "express-rate-limit"; 
+import { Server } from "socket.io";
+import * as pty from "node-pty";
+import os from "os";
+
 import nodeRoutes from "./routes/nodeRoutes";
 import flyRoutes from "./routes/flyRoutes";
 import userRoutes from "./routes/userRoutes";
@@ -11,41 +14,89 @@ import userRoutes from "./routes/userRoutes";
 const app = express();
 const server = http.createServer(app);
 
+const io = new Server(server, {
+  cors: {
+    origin: ["https://cmgvc.github.io", "http://localhost:5173", "http://127.0.0.1:5173"],
+    credentials: true,
+  },
+  transports: ["websocket"], 
+});
+
 app.set("trust proxy", 1); 
-const PORT = process.env.PORT || 5001;
-
-const generalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, 
-  limit: 500,
-  standardHeaders: "draft-7",
-  legacyHeaders: false,
-});
-
-const spawnLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, 
-  limit: 50, 
-  message: { error: "Spawn limit reached. Try again later." },
-});
-
 app.use(cors({
   origin: ["https://cmgvc.github.io", "http://localhost:5173", "http://127.0.0.1:5173"],
-  methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
   credentials: true,
 }));
 app.use(express.json());
-app.use(generalLimiter);
-
-app.use("/api/fly", spawnLimiter, flyRoutes); 
-app.use("/api/nodes", nodeRoutes);
-app.use("/api/users", userRoutes);
-
-mongoose
-  .connect(process.env.MONGODB_URI!)
-  .then(() => console.log("Connected to MongoDB"))
-  .catch((err) => console.error("MongoDB Error:", err.message));
 
 app.get("/health", (req, res) => res.status(200).send("OK"));
 
-server.listen(Number(PORT), "0.0.0.0", () => {
-  console.log(`Server active on port ${PORT}`);
+app.use("/api/fly", flyRoutes); 
+app.use("/api/nodes", nodeRoutes);
+app.use("/api/users", userRoutes);
+
+io.on("connection", (socket) => {
+  const userId = String(socket.handshake.query.userId ?? "unknown");
+  const terminalCwd = "/home/sandbox/workspace";
+
+  console.log(`Terminal session started: ${userId}`);
+
+  const shell = os.platform() === "win32" ? "powershell.exe" : "bash";
+
+  try {
+    const ptyProcess = pty.spawn(shell, ["--login"], {
+      name: "xterm-256color",
+      cols: 80,
+      rows: 24,
+      cwd: terminalCwd,
+      env: { 
+        ...process.env, 
+        HOME: terminalCwd,
+        TERM: "xterm-256color",
+        USER: "sandbox" 
+      },
+    });
+
+    setTimeout(() => {
+      ptyProcess.write("\n");
+    }, 500);
+
+    ptyProcess.onData((data) => {
+      socket.emit("terminal-output", data);
+    });
+
+    socket.on("terminal-input", (data) => {
+      if (ptyProcess) ptyProcess.write(data);
+    });
+
+    socket.on("terminal-resize", (size) => {
+      if (ptyProcess && size.cols > 0 && size.rows > 0) {
+        try {
+          ptyProcess.resize(size.cols, size.rows);
+        } catch (e) {
+          console.error("PTY Resize Error:", e);
+        }
+      }
+    });
+
+    socket.on("disconnect", () => {
+      console.log(`🔌 Session Ended: ${userId}`);
+      ptyProcess.kill();
+    });
+
+  } catch (err) {
+    console.error("PTY Spawn Error:", err);
+    socket.emit("terminal-output", "\r\n\x1b[31m[ERROR]: Failed to spawn shell process.\x1b[0m\r\n");
+  }
 });
+
+const PORT = process.env.PORT || 8080;
+mongoose
+  .connect(process.env.MONGODB_URI!)
+  .then(() => {
+    console.log("Connected to MongoDB");
+    server.listen(Number(PORT), "0.0.0.0", () => {
+      console.log(`Unified Backend active on port ${PORT}`);
+    });
+  })
+  .catch((err) => console.error("MongoDB Error:", err.message));

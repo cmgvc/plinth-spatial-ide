@@ -24,8 +24,6 @@ export default function LoginOverlay({ onLogin }: LoginOverlayProps) {
         email: email.toLowerCase().trim(),
       });
 
-      console.log("🔑 Auth Success. Payload:", data);
-
       if (!data.machineId) {
         console.warn("⚠️ Warning: machineId missing from server response!");
       }

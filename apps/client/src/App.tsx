@@ -96,7 +96,6 @@ export default function App() {
   useEffect(() => {
     if (!socket) return;
     const check = () => {
-      console.log("🔌 Socket status changed:", socket.connected);
       setIsConnected(socket.connected);
     };
     socket.on("connect", check);

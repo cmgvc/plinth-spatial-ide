@@ -12,7 +12,6 @@ export function useTerminalSocket(userId?: string, machineId?: string) {
   }, []);
 
   useEffect(() => {
-    console.log("Hook sync: ", { userId, machineId });
     if (!userId || !machineId || userId === "undefined") return;
 
     const s = getSocket(userId, machineId);
@@ -21,7 +20,6 @@ export function useTerminalSocket(userId?: string, machineId?: string) {
     setSocket(s);
 
     const onConnect = () => {
-      console.log("⚡ Hook detected connection");
       setIsConnected(true);
     };
     const onDisconnect = () => setIsConnected(false);

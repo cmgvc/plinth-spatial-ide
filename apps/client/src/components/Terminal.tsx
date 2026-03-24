@@ -27,16 +27,27 @@ export default function TerminalWindow({ socket }: { socket: Socket | null }) {
 
     const fitAddon = new FitAddon();
     term.loadAddon(fitAddon);
+
     term.open(terminalRef.current);
 
     termInstance.current = term;
     fitAddonRef.current = fitAddon;
 
     const handleResize = () => {
-      if (!terminalRef.current || terminalRef.current.offsetWidth === 0) return;
-      fitAddon.fit();
-      if (socket.connected) {
-        socket.emit("terminal-resize", { cols: term.cols, rows: term.rows });
+      if (
+        !terminalRef.current ||
+        terminalRef.current.offsetWidth === 0 ||
+        terminalRef.current.offsetHeight === 0
+      )
+        return;
+
+      try {
+        fitAddon.fit();
+        if (socket.connected) {
+          socket.emit("terminal-resize", { cols: term.cols, rows: term.rows });
+        }
+      } catch (e) {
+        console.warn("Terminal fit failed:", e);
       }
     };
 
@@ -53,10 +64,8 @@ export default function TerminalWindow({ socket }: { socket: Socket | null }) {
       term.write(
         "\r\n\x1b[32m[SYSTEM]: Terminal Engine Link Established...\x1b[0m\r\n",
       );
-      handleResize();
-      setTimeout(() => {
-        socket.emit("terminal-input", "\n");
-      }, 300);
+      setTimeout(handleResize, 50);
+      socket.emit("terminal-input", "\n");
     };
 
     socket.on("terminal-output", handleOutput);
@@ -72,12 +81,13 @@ export default function TerminalWindow({ socket }: { socket: Socket | null }) {
       }
     });
 
-    setTimeout(() => {
+    const initTimer = setTimeout(() => {
       handleResize();
       term.focus();
-    }, 100);
+    }, 150);
 
     return () => {
+      clearTimeout(initTimer);
       resizeObserver.disconnect();
       dataListener.dispose();
       socket.off("terminal-output", handleOutput);
@@ -89,10 +99,10 @@ export default function TerminalWindow({ socket }: { socket: Socket | null }) {
 
   return (
     <div
-      className="h-full w-full bg-[#0d0d0d] overflow-hidden p-2"
+      className="h-full w-full bg-[#0d0d0d] overflow-hidden p-2 flex flex-col"
       onClick={() => termInstance.current?.focus()}
     >
-      <div ref={terminalRef} className="h-full w-full min-h-[200px]" />
+      <div ref={terminalRef} className="flex-1 w-full min-h-0" />
     </div>
   );
 }

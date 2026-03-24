@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
-import { useReactFlow} from "reactflow";
+import { useReactFlow } from "reactflow";
 import { useDispatch, useSelector } from "react-redux";
 import { v4 as uuidv4 } from "uuid";
 import axios from "axios";
@@ -45,6 +45,7 @@ export default function App() {
     (state: RootState) => state.ui.confirmConfig,
   );
   const { setCenter, screenToFlowPosition, zoomIn, zoomOut } = useReactFlow();
+
   const [user, setUser] = useState<any>(null);
   const [showWelcome, setShowWelcome] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -56,10 +57,12 @@ export default function App() {
   const [syncStatus, setSyncStatus] = useState<
     "idle" | "saving" | "synced" | "error"
   >("synced");
+
   const { isTerminalOpen, toggleTerminal, socket } = useTerminalSocket(
     user?.id,
-    user?.flyMachineId,
+    user?.machineId,
   );
+
   const { syncFolder, uploadStatus } = useWorkspaceSync(
     user,
     socket,
@@ -76,26 +79,26 @@ export default function App() {
     escape: () => dispatch(setConfirm(null)),
   });
 
-  // Check for persisted session
   useEffect(() => {
     const saved = localStorage.getItem("blonde-user");
     if (saved) {
       const parsedUser = JSON.parse(saved);
       setUser(parsedUser);
-      console.log("♻️ Session Restored:", parsedUser.flyMachineId);
+      console.log("Session Restored for machine:", parsedUser.machineId);
     }
   }, []);
 
-  // Theme sync
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
     localStorage.setItem("app-theme", theme);
   }, [theme]);
 
-  // Socket connectivity listener
   useEffect(() => {
     if (!socket) return;
-    const check = () => setIsConnected(socket.connected);
+    const check = () => {
+      console.log("🔌 Socket status changed:", socket.connected);
+      setIsConnected(socket.connected);
+    };
     socket.on("connect", check);
     socket.on("disconnect", check);
     return () => {
@@ -104,7 +107,6 @@ export default function App() {
     };
   }, [socket]);
 
-  // Initial fetch for user's saved workspace
   useEffect(() => {
     if (user?.id) {
       axios
@@ -129,7 +131,6 @@ export default function App() {
     }
   }, [user?.id, dispatch]);
 
-  // Auto-save
   useEffect(() => {
     if (!user?.id) return;
     setSyncStatus("saving");
@@ -329,7 +330,6 @@ export default function App() {
           </button>
         </div>
 
-        {/* Terminal */}
         <section
           className={`w-full border-t border-[var(--border-color)] bg-[#0d0d0d] transition-all ${
             isTerminalOpen ? "h-72" : "h-0"

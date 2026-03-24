@@ -22,17 +22,17 @@ async function getOrCreateVolume(
 
   try {
     const { data: volumes } = await flyApi.get(`/volumes`);
-    const existing = volumes.find((v: any) => v.name === volName);
+    const existing = (volumes as any[]).find((v: any) => v.name === volName);
     if (existing) return existing.id;
 
     console.log(`Creating new persistent volume: ${volName}`);
-    const { data: newVol } = await flyApi.post(`/volumes`, {
+    const { data: newVol } = (await flyApi.post(`/volumes`, {
       name: volName,
       region: "yyz",
       size_gb: 1,
-    });
+    })) as { data: any };
 
-    return newVol.id;
+    return (newVol as any).id;
   } catch (err: any) {
     console.error("Volume Lifecycle Error:", err.response?.data || err.message);
     return null;
@@ -51,8 +51,9 @@ router.post("/spawn/:userId", async (req, res) => {
     if (machineId) {
       try {
         const { data: m } = await flyApi.get(`/machines/${machineId}`);
+        const machineData = m as any;
 
-        if (m.state === "started") {
+        if (machineData.state === "started") {
           return res.json({ status: "ready", machineId });
         }
 
@@ -77,7 +78,7 @@ router.post("/spawn/:userId", async (req, res) => {
     console.log(`Spawning fresh sandbox for user: ${userId}`);
     const flyResponse = await flyApi.post("/machines", {
       config: {
-        image: `registry.io/${process.env.FLY_APP_NAME}:latest`,
+        image: `registry.fly.io/${process.env.FLY_APP_NAME}:latest`,
         guest: { cpu_kind: "shared", cpus: 1, memory_mb: 1024 },
         user: "sandbox",
         init: {
@@ -92,19 +93,14 @@ router.post("/spawn/:userId", async (req, res) => {
         ],
         env: {
           USER_ID: userId,
-          HOME: "/home/sandbox/workspace",
+          HOME: "/home/sandbox",
           TERM: "xterm-256color",
-          LANG: "en_US.UTF-8",
           NODE_ENV: "production",
-        },
-        metadata: {
-          owner_id: userId,
-          type: "persistent-sandbox",
         },
       },
     });
 
-    const newId = flyResponse.data.id;
+    const newId = (flyResponse.data as any).id;
 
     await User.findByIdAndUpdate(userId, {
       flyMachineId: newId,

@@ -1,10 +1,21 @@
 import express from "express";
 import { User } from "../models/User";
+import axios from "axios";
 
 const router = express.Router();
 
-const DEFAULT_MACHINE_ID = "08003d2b09e378"; 
-const DEFAULT_VOLUME_ID = "vol_01kmgeazgjvmjw3g3zg2gzh4gk";
+const FLY_API_TOKEN = process.env.FLY_API_TOKEN;
+const FLY_APP_NAME = "plinth-workers";
+
+interface FlyVolume {
+  id: string;
+  name: string;
+}
+
+interface FlyMachine {
+  id: string;
+  name: string;
+}
 
 router.post("/login", async (req, res) => {
   try {
@@ -14,32 +25,55 @@ router.post("/login", async (req, res) => {
     let user = await User.findOne({ email });
 
     if (!user) {
-      console.log("Creating new user with linked infrastructure:", email);
-      user = new User({
-        email,
-        username: email.split("@")[0],
-        rootFolders: [],
-        flyMachineId: DEFAULT_MACHINE_ID,
-        flyVolumeId: DEFAULT_VOLUME_ID
-      });
+      user = new User({ email, username: email.split("@")[0] });
       await user.save();
-    } else if (!user.flyMachineId) {
-      user.flyMachineId = DEFAULT_MACHINE_ID;
-      user.flyVolumeId = DEFAULT_VOLUME_ID;
+    }
+
+    if (!user.flyMachineId) {
+      console.log(`Provisioning infrastructure for ${email}...`);
+
+      const volumeResponse = await axios.post<FlyVolume>(
+        `https://api.machines.dev/v1/apps/${FLY_APP_NAME}/volumes`,
+        {
+          name: `vol_${user._id.toString().slice(-10)}`,
+          region: "yyz",
+          size_gb: 1,
+        },
+        { headers: { Authorization: `Bearer ${FLY_API_TOKEN}` } },
+      );
+
+      const volumeId = volumeResponse.data.id;
+
+      const machineResponse = await axios.post<FlyMachine>(
+        `https://api.machines.dev/v1/apps/${FLY_APP_NAME}/machines`,
+        {
+          config: {
+            image: `registry.fly.io/${FLY_APP_NAME}:latest`,
+            mounts: [{ volume: volumeId, path: "/home/sandbox/workspace" }],
+            guest: { cpu_kind: "shared", cpus: 1, memory_mb: 256 },
+            auto_destroy: false,
+            restart: { policy: "no" },
+          },
+        },
+        { headers: { Authorization: `Bearer ${FLY_API_TOKEN}` } },
+      );
+
+      user.flyMachineId = machineResponse.data.id;
+      user.flyVolumeId = volumeId;
       await user.save();
-      console.log("Linked existing user to machine:", DEFAULT_MACHINE_ID);
     }
 
     res.json({
-      id: user._id.toString(),
+      id: user._id,
       username: user.username,
-      rootFolders: user.rootFolders || [],
-      flyMachineId: user.flyMachineId,
-      flyVolumeId: user.flyVolumeId
+      machineId: user.flyMachineId,
     });
   } catch (err: any) {
-    console.error("AUTH ERROR:", err.message);
-    res.status(500).json({ error: "Login failed" });
+    console.error("FLY API ERROR:", err.response?.data || err.message);
+    res.status(500).json({
+      error: "Failed to initialize user environment",
+      details: err.response?.data?.error || "Check server logs",
+    });
   }
 });
 

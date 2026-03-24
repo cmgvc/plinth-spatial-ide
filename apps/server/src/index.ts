@@ -5,7 +5,6 @@ import cors from "cors";
 import http from "http";
 import { Server } from "socket.io";
 import * as pty from "node-pty";
-import os from "os";
 
 import nodeRoutes from "./routes/nodeRoutes";
 import flyRoutes from "./routes/flyRoutes";
@@ -36,28 +35,32 @@ app.use("/api/nodes", nodeRoutes);
 app.use("/api/users", userRoutes);
 
 io.on("connection", (socket) => {
-  const userId = String(socket.handshake.query.userId ?? "unknown");
   const terminalCwd = "/home/sandbox/workspace"; 
 
-  console.log(`Terminal session started: ${userId}`);
 
-  const shell = os.platform() === "win32" ? "powershell.exe" : "bash";
-
+  const userId = String(socket.handshake.query.userId ?? "unknown");
+const machineId = String(socket.handshake.query.machineId ?? "");
+console.log(`🚀 Connecting ${userId} to Machine ${machineId}`);
+  const shell = "fly";
+const args = [
+  "ssh", 
+  "console", 
+  "-m", String(machineId), 
+  "-C", "/bin/bash --login"
+];
   try {
-    const ptyProcess = pty.spawn(shell, ["--login"], {
+    const ptyProcess = pty.spawn(shell, args, {
       name: "xterm-256color",
       cols: 80,
       rows: 24,
-      cwd: terminalCwd,
-      uid: 1000, 
-      gid: 1000,
       env: { 
         ...process.env, 
         HOME: "/home/sandbox", 
         TERM: "xterm-256color",
         USER: "sandbox",
         PATH: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-        WORKSPACE: terminalCwd
+        WORKSPACE: terminalCwd,
+        FLY_API_TOKEN: process.env.FLY_API_TOKEN
       },
     });
 
@@ -69,9 +72,12 @@ io.on("connection", (socket) => {
       }
     }, 500);
 
-    ptyProcess.onData((data) => {
-      socket.emit("terminal-output", data);
-    });
+ptyProcess.onData((data) => {
+  const shortId = userId.substring(0, 5);
+  console.log(`[PTY -> ${shortId}]: ${data.length} bytes`);
+  socket.emit("terminal-output", data);
+
+});
 
 socket.on("terminal-input", (data) => {
       if (ptyProcess) {
@@ -95,7 +101,6 @@ socket.on("terminal-input", (data) => {
       try {
         ptyProcess.kill();
       } catch (e) {
-        // Process might already be dead
       }
     });
 

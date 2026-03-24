@@ -1,11 +1,11 @@
 import React, { useState } from "react";
 import axios from "axios";
 
-export default function LoginOverlay({
-  onLogin,
-}: {
+interface LoginOverlayProps {
   onLogin: (user: any) => void;
-}) {
+}
+
+export default function LoginOverlay({ onLogin }: LoginOverlayProps) {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("READY");
@@ -26,8 +26,8 @@ export default function LoginOverlay({
 
       console.log("🔑 Auth Success. Payload:", data);
 
-      if (!data.flyMachineId) {
-        console.warn("⚠️ Warning: flyMachineId missing from server response!");
+      if (!data.machineId) {
+        console.warn("⚠️ Warning: machineId missing from server response!");
       }
 
       setStatus("CONNECTED");
@@ -39,6 +39,7 @@ export default function LoginOverlay({
       console.error("❌ Login Failed:", err.response?.data || err.message);
       setStatus("ERROR");
       setLoading(false);
+
       setTimeout(() => setStatus("READY"), 2000);
     }
   };
@@ -92,7 +93,7 @@ export default function LoginOverlay({
               {loading && (
                 <div className="w-3 h-3 border-2 border-black/20 border-t-black rounded-full animate-spin" />
               )}
-              <span>{loading ? "Verify" : "Enter"}</span>
+              <span>{loading ? "Verifying..." : "Enter"}</span>
             </button>
           </form>
 

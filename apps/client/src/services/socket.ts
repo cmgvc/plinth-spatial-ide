@@ -18,8 +18,6 @@ export const getSocket = (
   }
 
   if (!socket) {
-    console.log(`🔌 Connecting to Machine: ${machineId}`);
-
     socket = io(BASE_URL, {
       withCredentials: true,
       transports: ["websocket"],
@@ -29,27 +27,24 @@ export const getSocket = (
         machineId,
         "fly-machine-id": machineId,
       },
-      extraHeaders: {
-        "fly-force-instance-id": machineId,
-      },
     });
 
-    socket.on("connect", () => {
-      console.log("✅ Socket Connected! ID:", socket?.id);
-    });
+    // socket.on("connect", () => {
+    //   console.log("Socket Connected. ID:", socket?.id);
+    // });
 
     socket.on("connect_error", (err) => {
-      console.error("❌ Socket Connection Error:", err.message);
+      console.error("Socket Connection Error:", err.message);
       console.error("Details:", err);
     });
 
-    socket.on("disconnect", (reason) => {
-      console.warn("🔌 Socket Disconnected:", reason);
-    });
+    // socket.on("disconnect", (reason) => {
+    //   console.warn("🔌 Socket Disconnected:", reason);
+    // });
 
     socket.on("terminal-output", (data) => {
       if (data.length > 0) {
-        console.debug(`📥 Received ${data.length} bytes from PTY`);
+        console.debug(`Received ${data.length} bytes from PTY`);
       }
     });
 

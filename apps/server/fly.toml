@@ -1,16 +1,10 @@
 app = "plinth"
 primary_region = "yyz"
 
-[[mounts]]
-  source = "plinth_data"
-  destination = "/home/sandbox/workspace"
-  initial_size = "1gb"
-
 [[services]]
   internal_port = 8080
   protocol = "tcp"
 
-  # 🎯 ADD THIS: Explicitly map external traffic to internal 8080
   [[services.ports]]
     handlers = ["http"]
     port = 80
